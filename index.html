@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Forest Survival: 99 Nights (Cross-Platform Edition)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+            background: #000;
+            touch-action: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        /* Device Selection Setup Overlay */
+        #setup-menu {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle, #1a0505 0%, #000000 100%);
+            z-index: 30;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .menu-btn {
+            padding: 15px 35px;
+            margin: 15px;
+            font-size: 1.2rem;
+            font-family: monospace;
+            font-weight: bold;
+            color: #fff;
+            background: #222;
+            border: 3px solid #ff3333;
+            cursor: pointer;
+            box-shadow: 5px 5px 0px #000;
+            transition: transform 0.1s;
+        }
+        .menu-btn:active {
+            transform: translate(3px, 3px);
+            box-shadow: 2px 2px 0px #000;
+        }
+
+        /* UI elements */
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            text-shadow: 3px 3px 0px #000;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .bar-container {
+            width: 200px;
+            height: 20px;
+            background: rgba(0,0,0,0.7);
+            border: 3px solid #fff;
+            margin-top: 5px;
+            box-shadow: 5px 5px 0px #000;
+        }
+        #sanity-bar {
+            width: 100%;
+            height: 100%;
+            background: #00ffcc;
+        }
+        #interaction-prompt {
+            position: absolute;
+            bottom: 25%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffeb3b;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-shadow: 3px 3px 0px #000;
+            display: none;
+            z-index: 10;
+            pointer-events: none;
+            text-align: center;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            text-shadow: 2px 2px 0px #000;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        /* Mobile Touch Controls Overlay */
+        #mobile-hud {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 15;
+            pointer-events: none;
+        }
+        .joystick-zone {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            pointer-events: auto;
+        }
+        .joystick-knob {
+            position: absolute;
+            top: 35px; left: 35px;
+            width: 50px; height: 50px;
+            background: rgba(0, 255, 204, 0.6);
+            border-radius: 50%;
+        }
+        #touch-look-zone {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50vw;
+            height: 100vh;
+            pointer-events: auto;
+        }
+        #action-button {
+            position: absolute;
+            bottom: 50px;
+            right: 40px;
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 51, 85, 0.7);
+            border: 4px solid #fff;
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            box-shadow: 4px 4px 0px #000;
+            z-index: 16;
+        }
+
+        /* Screens */
+        .screen-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 25;
+            font-size: 2rem;
+            text-align: center;
+        }
+        #game-over { background: #110000; color: #ff3333; }
+        #victory { background: #ffffff; color: #000000; }
+        #flash-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 20;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="setup-menu">
+        <h1 style="color: #ff3355; font-size: 2.5rem; margin-bottom: 5px;">99 NIGHTS IN THE FOREST</h1>
+        <p style="color: #aaa; max-width: 500px; line-height: 1.5; margin-bottom: 30px;">
+            Find the hidden nuke inside one of the 50 chests to destroy the forest. Dodge Bobby and use the glowing safety cabins to break his line of sight!
+        </p>
+        <div style="display: flex; flex-wrap: wrap; justify-content: center;">
+            <button class="menu-btn" onclick="selectDevice('desktop')">💻 DESKTOP (WASD + Mouse)</button>
+            <button class="menu-btn" onclick="selectDevice('mobile')">📱 MOBILE (Touch Joysticks)</button>
+        </div>
+    </div>
+
+    <div id="crosshair">+</div>
+    <div id="interaction-prompt">Look at Chest<br><span id="bind-hint">Press E to Open</span></div>
+    <div id="flash-overlay"></div>
+
+    <div id="mobile-hud">
+        <div class="joystick-zone" id="joy-move-zone">
+            <div class="joystick-knob" id="joy-move-knob"></div>
+        </div>
+        <div id="touch-look-zone"></div>
+        <div id="action-button">USE</div>
+    </div>
+
+    <div id="ui">
+        <div id="day-counter" style="color: #ff3355; font-weight: bold;">Night: 1/99</div>
+        <div id="time-of-day">Time: Evening</div>
+        <div style="margin-top: 10px;">Sanity:</div>
+        <div class="bar-container">
+            <div id="sanity-bar"></div>
+        </div>
+        <div id="chest-alert" style="margin-top: 15px; color: #ffeb3b; font-weight: bold;"></div>
+    </div>
+
+    <div id="game-over" class="screen-overlay">
+        <h1>YOU LOST YOUR SANITY</h1>
+        <p style="font-size: 1.2rem; color: white; margin-bottom: 20px;">Bobby caught up to you in the dark.</p>
+        <button class="menu-btn" onclick="location.reload()" style="border-color: #fff;">Try Again</button>
+    </div>
+
+    <div id="victory" class="screen-overlay">
+        <h1 style="color: #ff1144; font-size: 3rem; margin: 0; text-shadow: 4px 4px 0px #000;">TACTICAL NUKE DETONATED</h1>
+        <p style="font-size: 1.3rem; font-weight: bold; margin-top: 10px;">The forest and Bobby are completely gone. You Win!</p>
+        <button class="menu-btn" onclick="location.reload()" style="background: black; color: white; border-color: black;">Play Again</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // --- System States ---
+        let scene, camera, renderer;
+        let isMobile = false;
+        let gameStarted = false;
+        let audioCtx = null, synthInterval = null;
+        let prevTime = performance.now();
+
+        // --- Gameplay States ---
+        let sanity = 100, nightCounter = 1, timeOfDay = 0;
+        let isGameOver = false, isNuking = false, nukeTimer = 0;
+        let playerInSafeZone = false;
+
+        // --- Controls Mapping ---
+        const velocity = new THREE.Vector3();
+        const inputDir = new THREE.Vector3();
+        const cameraRotation = { x: 0, y: 0 };
+        const keys = { w: false, a: false, s: false, d: false };
+        
+        // --- Entities arrays ---
+        let ambientLight, hemiLight, flashlight;
+        let chests = [], safeZones = [];
+        let activeChest = null;
+
+        // Bobby structural variables
+        let bobby, bobbyName3D;
+        let bobbyState = 'WANDER'; // WANDER, CHASE, COOLDOWN
+        let bobbyTimer = 0;
+        const BOBBY_CHASE_MAX = 6.0; // Chases for exactly 6 seconds maximum before giving up
+        const BOBBY_COOLDOWN_MAX = 4.0; // Rests for 4 seconds before chasing again
+
+        // Mobile Look state
+        let mobileJoyX = 0, mobileJoyY = 0;
+
+        // UI references
+        const canvasContainer = document.getElementById('canvas-container');
+        const promptUI = document.getElementById('interaction-prompt');
+        const alertUI = document.getElementById('chest-alert');
+        const flashOverlay = document.getElementById('flash-overlay');
+
+        function selectDevice(deviceType) {
+            document.getElementById('setup-menu').style.display = 'none';
+            if(deviceType === 'mobile') {
+                isMobile = true;
+                document.getElementById('mobile-hud').style.display = 'block';
+                document.getElementById('crosshair').style.display = 'none';
+                document.getElementById('bind-hint').innerText = 'Tap "USE" Button';
+            }
+            initGame();
+        }
+
+        function initGame() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x05100d);
+            scene.fog = new THREE.FogExp2(0x05100d, 0.04);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            canvasContainer.appendChild(renderer.domElement);
+
+            ambientLight = new THREE.AmbientLight(0x113322, 0.4); 
+            scene.add(ambientLight);
+
+            hemiLight = new THREE.HemisphereLight(0x44aaff, 0x113311, 0.6); 
+            hemiLight.position.set(0, 200, 0);
+            scene.add(hemiLight);
+
+            flashlight = new THREE.SpotLight(0xfff3cc, 3, 50, Math.PI / 4, 0.4, 1);
+            flashlight.castShadow = true;
+            camera.add(flashlight);
+            flashlight.position.set(0, 0, 0);
+            flashlight.target.position.set(0, 0, -1);
+            camera.add(flashlight.target);
+            scene.add(camera);
+
+            createWorldTerrain();
+            buildForestLayout();
+            spawnChests();
+            buildSafeHouses();
+            spawnBobby3D();
+
+            if(!isMobile) {
+                document.addEventListener('keydown', (e) => handleKeys(e, true));
+                document.addEventListener('keyup', (e) => handleKeys(e, false));
+                window.addEventListener('click', () => canvasContainer.requestPointerLock());
+                document.addEventListener('mousemove', handleMouseLook);
+            } else {
+                setupMobileInput();
+            }
+            window.addEventListener('resize', onWindowResize);
+
+            startBuiltInMusic();
+            
+            gameStarted = true;
+            animateLoop();
+        }
+
+        function createWorldTerrain() {
+            const floorGeo = new THREE.PlaneGeometry(1000, 1000);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x0a1c12, roughness: 0.9 }); 
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+        }
+
+        function buildForestLayout() {
+            const trunkGeo = new THREE.CylinderGeometry(0.15, 0.35, 5, 8);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2314, roughness: 0.9 });
+            const foliageGeo = new THREE.ConeGeometry(2.2, 6, 6);
+            const foliageMat = new THREE.MeshStandardMaterial({ color: 0x00cc44, roughness: 0.5 }); 
+
+            for (let i = 0; i < 450; i++) {
+                const x = (Math.random() - 0.5) * 450;
+                const z = (Math.random() - 0.5) * 450;
+                if (Math.sqrt(x*x + z*z) < 25) continue; 
+
+                const tree = new THREE.Group();
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = 2.5;
+                tree.add(trunk);
+
+                const leaves = new THREE.Mesh(foliageGeo, foliageMat);
+                leaves.position.y = 5.5;
+                tree.add(leaves);
+
+                tree.position.set(x, 0, z);
+                scene.add(tree);
+            }
+        }
+
+        function spawnChests() {
+            const count = 50;
+            const nukeIndex = Math.floor(Math.random() * count);
+            const boxGeo = new THREE.BoxGeometry(1.3, 0.8, 0.8);
+            const boxMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.4 }); 
+            const lockMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, metalness: 0.8 }); 
+
+            for(let i=0; i<count; i++) {
+                const cx = (Math.random() - 0.5) * 420;
+                const cz = (Math.random() - 0.5) * 420;
+                if(Math.sqrt(cx*cx + cz*cz) < 25) { i--; continue; }
+
+                const chest = new THREE.Group();
+                const body = new THREE.Mesh(boxGeo, boxMat);
+                body.position.y = 0.4;
+                chest.add(body);
+
+                const lock = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.1), lockMat);
+                lock.position.set(0, 0.4, 0.41);
+                chest.add(lock);
+
+                chest.position.set(cx, 0, cz);
+                chest.rotation.y = Math.random() * Math.PI * 2;
+                chest.userData = { hasNuke: (i === nukeIndex), opened: false };
+                
+                scene.add(chest);
+                chests.push(chest);
+            }
+        }
+
+        function buildSafeHouses() {
+            const positions = [ {x: 60, z: 60}, {x: -60, z: -60}, {x: 80, z: -80}, {x: -80, z: 80} ];
+            
+            positions.forEach((pos) => {
+                const house = new THREE.Group();
+                const frameMat = new THREE.MeshStandardMaterial({ color: 0xff00ff, emissive: 0xff00ff, emissiveIntensity: 0.5 });
+                const baseGeo = new THREE.BoxGeometry(8, 0.1, 8);
+                const floorMesh = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial({color: 0x221133}));
+                floorMesh.position.y = 0.05;
+                house.add(floorMesh);
+
+                const pillarGeo = new THREE.CylinderGeometry(0.1, 0.1, 4.5);
+                const offsets = [[-3.8, 3.8], [3.8, 3.8], [-3.8, -3.8], [3.8, -3.8]];
+                offsets.forEach(off => {
+                    const pillar = new THREE.Mesh(pillarGeo, frameMat);
+                    pillar.position.set(off[0], 2.25, off[1]);
+                    house.add(pillar);
+                });
+
+                const crystal = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2, 4), frameMat);
+                crystal.position.y = 5.5;
+                house.add(crystal);
+
+                house.position.set(pos.x, 0, pos.z);
+                scene.add(house);
+                safeZones.push(pos); 
+            });
+        }
+
+        function spawnBobby3D() {
+            bobby = new THREE.Group();
+            const voidMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 1.0 }); 
+            
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), voidMat); head.position.y = 2.9; bobby.add(head);
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.4), voidMat); torso.position.y = 2.0; bobby.add(torso);
+            
+            const limbGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.1);
+            const armL = new THREE.Mesh(limbGeo, voidMat); armL.position.set(-0.4, 2.1, 0); armL.rotation.z = Math.PI/4; bobby.add(armL);
+            const armR = new THREE.Mesh(limbGeo, voidMat); armR.position.set(0.4, 2.1, 0); armR.rotation.z = -Math.PI/4; bobby.add(armR);
+            
+            const legL = new THREE.Mesh(limbGeo, voidMat); legL.position.set(-0.25, 0.7, 0); legL.rotation.z = 0.1; bobby.add(legL);
+            const legR = new THREE.Mesh(limbGeo, voidMat); legR.position.set(0.25, 0.7, 0); legR.rotation.z = -0.1; bobby.add(legR);
+
+            bobby.position.set(90, 0, 90);
+            scene.add(bobby);
+
+            const canv = document.createElement('canvas'); canv.width = 256; canv.height = 64;
+            const c = canv.getContext('2d');
+            c.fillStyle = 'rgba(255, 0, 50, 0.8)'; c.fillRect(0,0,256,64);
+            c.font = 'Bold 36px monospace'; c.fillStyle = '#fff'; c.textAlign='center'; c.textBaseline='middle';
+            c.fillText('BOBBY', 128, 32);
+
+            const tex = new THREE.CanvasTexture(canv);
+            bobbyName3D = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 0.625), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+            bobbyName3D.position.y = 3.7;
+            bobby.add(bobbyName3D);
+        }
+
+        function handleKeys(e, isPressed) {
+            if(isGameOver || isNuking) return;
+            switch (e.code) {
+                case 'KeyW': keys.w = isPressed; break;
+                case 'KeyA': keys.a = isPressed; break;
+                case 'KeyS': keys.s = isPressed; break;
+                case 'KeyD': keys.d = isPressed; break;
+                case 'KeyE': if(isPressed) interactAction(); break;
+            }
+        }
+
+        function handleMouseLook(e) {
+            if (document.pointerLockElement !== canvasContainer || isMobile) return;
+            cameraRotation.y -= e.movementX * 0.0025;
+            cameraRotation.x -= e.movementY * 0.0025;
+            cameraRotation.x = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, cameraRotation.x));
+            camera.quaternion.setFromEuler(new THREE.Euler(cameraRotation.x, cameraRotation.y, 0, 'YXZ'));
+        }
+
+        function setupMobileInput() {
+            const moveKnob = document.getElementById('joy-move-knob');
+            const moveZone = document.getElementById('joy-move-zone');
+            const lookZone = document.getElementById('touch-look-zone');
+            const actBtn = document.getElementById('action-button');
+            
+            let moveActive = false;
+            let lastTouchX = 0, lastTouchY = 0;
+
+            // Movement Joystick
+            moveZone.addEventListener('touchstart', (e) => { moveActive = true; });
+            moveZone.addEventListener('touchmove', (e) => {
+                if(!moveActive) return;
+                const touch = e.touches[0];
+                const bounds = moveZone.getBoundingClientRect();
+                const centerX = bounds.left + bounds.width / 2;
+                const centerY = bounds.top + bounds.height / 2;
+                
+                let outX = touch.clientX - centerX;
+                let outY = touch.clientY - centerY;
+                const dist = Math.hypot(outX, outY);
+                if(dist > 40) { outX = (outX/dist)*40; outY = (outY/dist)*40; }
+                
+                moveKnob.style.transform = `translate(${outX}px, ${outY}px)`;
+                mobileJoyX = outX / 40; mobileJoyY = outY / 40;
+            });
+            
+            const stopMove = () => { moveActive = false; moveKnob.style.transform = 'none'; mobileJoyX = 0; mobileJoyY = 0; };
+            moveZone.addEventListener('touchend', stopMove);
+            moveZone.addEventListener('touchcancel', stopMove);
+
+            // Look Zone (Right half of the screen)
+            lookZone.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                lastTouchX = touch.clientX;
+                lastTouchY = touch.clientY;
+            });
+
+            lookZone.addEventListener('touchmove', (e) => {
+                // Find the touch that belongs to the look zone
+                let touch = null;
+                for(let i=0; i<e.touches.length; i++) {
+                    if(e.touches[i].clientX > window.innerWidth / 2) {
+                        touch = e.touches[i];
+                        break;
+                    }
+                }
+                if(!touch) return;
+
+                const deltaX = touch.clientX - lastTouchX;
+                const deltaY = touch.clientY - lastTouchY;
+
+                cameraRotation.y -= deltaX * 0.005;
+                cameraRotation.x -= deltaY * 0.005;
+                cameraRotation.x = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, cameraRotation.x));
+                camera.quaternion.setFromEuler(new THREE.Euler(cameraRotation.x, cameraRotation.y, 0, 'YXZ'));
+
+                lastTouchX = touch.clientX;
+                lastTouchY = touch.clientY;
+            });
+
+            // Action button execution
+            actBtn.addEventListener('touchstart', (e) => { e.preventDefault(); interactAction(); });
+        }
+
+        function interactAction() {
+            if(activeChest && !activeChest.userData.opened) {
+                activeChest.userData.opened = true;
+                activeChest.children[0].scale.set(1.3, 0.2, 0.8);
+                activeChest.children[0].position.y = 0.1;
+
+                if(activeChest.userData.hasNuke) {
+                    isNuking = true;
+                    if(!isMobile) document.exitPointerLock();
+                    alertUI.style.color = "#ff1144";
+                    alertUI.innerText = "🚨 TACTICAL NUKE ACQUIRED! DETONATION IN 3s! 🚨";
+                } else {
+                    alertUI.innerText = "Chest contained nothing... keep searching!";
+                    setTimeout(() => alertUI.innerText = "", 2500);
+                }
+            }
+        }
+
+        function startBuiltInMusic() {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                synthInterval = setInterval(() => {
+                    if(isGameOver || isNuking || !gameStarted) return;
+                    
+                    let osc = audioCtx.createOscillator();
+                    let gain = audioCtx.createGain();
+                    
+                    const sequence = [65, 62, 58, 49];
+                    let pitch = sequence[Math.floor(Math.random() * sequence.length)];
+                    
+                    if(bobbyState === 'CHASE') {
+                        osc.type = 'sawtooth';
+                        pitch *= 1.75; 
+                        gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+                    } else {
+                        osc.type = 'triangle';
+                        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                    }
+                    
+                    osc.frequency.setValueAtTime(pitch, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.7);
+                    
+                    osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.75);
+                }, 500);
+            } catch(e) { console.error("Audio block bypassed: ", e); }
+        }
+
+        function animateLoop() {
+            requestAnimationFrame(animateLoop);
+            
+            const time = performance.now();
+            const delta = (time - prevTime) / 1000;
+            prevTime = time;
+
+            if (isNuking) {
+                processNukeScene(delta);
+                return;
+            }
+            if (isGameOver) return;
+
+            processMovement(delta);
+            processEnvironmentCycle(delta);
+            evaluateInteractions();
+            processBobbyAI(delta);
+
+            renderer.render(scene, camera);
+        }
+
+        function processMovement(delta) {
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+
+            if(!isMobile) {
+                inputDir.z = Number(keys.w) - Number(keys.s);
+                inputDir.x = Number(keys.d) - Number(keys.a);
+                inputDir.normalize();
+
+                const camEuler = new THREE.Euler(0, cameraRotation.y, 0, 'YXZ');
+                const forwardMove = new THREE.Vector3(inputDir.x, 0, -inputDir.z).applyEuler(camEuler);
+                
+                if (keys.w || keys.s) velocity.z -= forwardMove.z * 110.0 * delta;
+                if (keys.a || keys.d) velocity.x += forwardMove.x * 110.0 * delta;
+            } else {
+                const camEuler = new THREE.Euler(0, cameraRotation.y, 0, 'YXZ');
+                const touchMove = new THREE.Vector3(mobileJoyX, 0, mobileJoyY).applyEuler(camEuler);
+                velocity.x += touchMove.x * 12.0 * delta;
+                velocity.z += touchMove.z * 12.0 * delta;
+            }
+
+            camera.position.addScaledVector(velocity, delta);
+            camera.position.x = Math.max(-230, Math.min(230, camera.position.x));
+            camera.position.z = Math.max(-230, Math.min(230, camera.position.z));
+
+            playerInSafeZone = false;
+            for(let zone of safeZones) {
+                if(Math.hypot(camera.position.x - zone.x, camera.position.z - zone.z) < 4.2) {
+                    playerInSafeZone = true;
+                    break;
+                }
+            }
+        }
+
+        function processEnvironmentCycle(delta) {
+            timeOfDay += delta * 2.0;
+            if(timeOfDay >= 100) { timeOfDay = 0; nightCounter++; document.getElementById('day-counter').innerText = `Night: ${nightCounter}/99`; }
+
+            if(timeOfDay > 25 && timeOfDay < 75) {
+                document.getElementById('time-of-day').innerText = "Time: Midnight 🌘";
+                scene.background.setHex(0x010403); scene.fog.color.setHex(0x010403);
+                hemiLight.intensity = 0.05; flashlight.intensity = 4.5;
+                if(!playerInSafeZone) sanity -= delta * 3.5; 
+            } else {
+                document.getElementById('time-of-day').innerText = "Time: Twilight 🌅";
+                scene.background.setHex(0x051a14); scene.fog.color.setHex(0x051a14);
+                hemiLight.intensity = 0.4; flashlight.intensity = 0.8;
+                if(sanity < 100) sanity += delta * 5.0; 
+            }
+
+            if(playerInSafeZone && sanity < 100) sanity += delta * 12.0; 
+            
+            sanity = Math.max(0, Math.min(100, sanity));
+            document.getElementById('sanity-bar').style.width = sanity + '%';
+
+            if(sanity <= 0) {
+                isGameOver = true;
+                if(!isMobile) document.exitPointerLock();
+                document.getElementById('game-over').style.display = 'flex';
+            }
+        }
+
+        function evaluateInteractions() {
+            let lookingAtChest = null;
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+
+            for (let chest of chests) {
+                const dist = camera.position.distanceTo(chest.position);
+                if(dist < 5.5) {
+                    const toChest = chest.position.clone().sub(camera.position).normalize();
+                    const alignment = forward.dot(toChest);
+                    if((isMobile || alignment > 0.82) && !chest.userData.opened) {
+                        lookingAtChest = chest;
+                        break;
+                    }
+                }
+            }
+
+            if(lookingAtChest) {
+                activeChest = lookingAtChest;
+                promptUI.style.display = 'block';
+            } else {
+                activeChest = null;
+                promptUI.style.display = 'none';
+            }
+        }
+
+        function processBobbyAI(delta) {
+            const playerPos = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+            bobbyName3D.lookAt(camera.position); 
+
+            const distance = bobby.position.distanceTo(playerPos);
+
+            switch(bobbyState) {
+                case 'WANDER':
+                    bobby.lookAt(playerPos);
+                    if (!playerInSafeZone && distance < 65) {
+                        bobbyState = 'CHASE';
+                        bobbyTimer = 0;
+                    } else {
+                        const wanderDir = new THREE.Vector3(Math.cos(timeOfDay), 0, Math.sin(timeOfDay)).normalize();
+                        bobby.position.addScaledVector(wanderDir, 5.0 * delta);
+                    }
+                    break;
+
+                case 'CHASE':
+                    bobby.lookAt(playerPos);
+                    const chaseDir = playerPos.clone().sub(bobby.position).normalize();
+                    bobby.position.addScaledVector(chaseDir, 18.5 * delta);
+
+                    bobbyTimer += delta;
+                    if(playerInSafeZone || bobbyTimer >= BOBBY_CHASE_MAX) {
+                        bobbyState = 'COOLDOWN';
+                        bobbyTimer = 0;
+                        alertUI.style.color = "#00ffcc";
+                        alertUI.innerText = "Bobby lost interest and stopped chasing!";
+                        setTimeout(() => alertUI.innerText = "", 3000);
+                    }
+
+                    if(distance < 5.0 && !playerInSafeZone) {
+                        sanity -= delta * 65.0; 
+                    }
+                    break;
+
+                case 'COOLDOWN':
+                    const fleeDir = bobby.position.clone().sub(playerPos).normalize();
+                    bobby.position.addScaledVector(fleeDir, 6.0 * delta);
+
+                    bobbyTimer += delta;
+                    if(bobbyTimer >= BOBBY_COOLDOWN_MAX) {
+                        bobbyState = 'WANDER';
+                    }
+                    break;
+            }
+        }
+
+        function processNukeScene(delta) {
+            nukeTimer += delta;
+            if(nukeTimer < 3.0) {
+                camera.position.x += (Math.random() - 0.5) * 0.4;
+                camera.position.y += (Math.random() - 0.5) * 0.4;
+                
+                ambientLight.intensity += delta * 35;
+                bobby.visible = false;
+                renderer.render(scene, camera);
+            } else if (nukeTimer >= 3.0 && nukeTimer < 4.5) {
+                flashOverlay.style.opacity = (nukeTimer - 3.0) / 1.5;
+            } else {
+                document.getElementById('victory').style.display = 'flex';
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
