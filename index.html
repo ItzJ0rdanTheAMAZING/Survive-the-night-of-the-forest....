@@ -101,6 +101,41 @@
             z-index: 5;
             pointer-events: none;
         }
+        #nuke-prompt {
+            position: absolute;
+            top: 18%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffeb3b;
+            font-size: 1.4rem;
+            font-weight: bold;
+            text-shadow: 3px 3px 0px #000;
+            display: none;
+            z-index: 21;
+            pointer-events: none;
+            text-align: center;
+        }
+        #nuke-trigger {
+            position: absolute;
+            bottom: 18%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 16px 30px;
+            font-size: 1.2rem;
+            font-family: monospace;
+            font-weight: bold;
+            color: #fff;
+            background: #ff1144;
+            border: 4px solid #fff;
+            cursor: pointer;
+            box-shadow: 6px 6px 0px #000;
+            display: none;
+            z-index: 22;
+        }
+        #nuke-trigger:active {
+            transform: translateX(-50%) translate(3px, 3px);
+            box-shadow: 2px 2px 0px #000;
+        }
 
         /* Mobile Touch Controls Overlay */
         #mobile-hud {
@@ -197,6 +232,8 @@
 
     <div id="crosshair">+</div>
     <div id="interaction-prompt">Look at Chest<br><span id="bind-hint">Press E to Open</span></div>
+    <div id="nuke-prompt">Press the big red button to launch the nuke!</div>
+    <button id="nuke-trigger">LAUNCH NUKE</button>
     <div id="flash-overlay"></div>
 
     <div id="mobile-hud">
@@ -214,13 +251,8 @@
         <div class="bar-container">
             <div id="sanity-bar"></div>
         </div>
+        <div id="rifle-status" style="margin-top: 12px; color: #7cff83; font-weight: bold;">Rifle: Not Found</div>
         <div id="chest-alert" style="margin-top: 15px; color: #ffeb3b; font-weight: bold;"></div>
-    </div>
-
-    <div id="game-over" class="screen-overlay">
-        <h1>YOU LOST YOUR SANITY</h1>
-        <p style="font-size: 1.2rem; color: white; margin-bottom: 20px;">Bobby caught up to you in the dark.</p>
-        <button class="menu-btn" onclick="location.reload()" style="border-color: #fff;">Try Again</button>
     </div>
 
     <div id="victory" class="screen-overlay">
@@ -243,6 +275,11 @@
         let sanity = 100, nightCounter = 1, timeOfDay = 0;
         let isGameOver = false, isNuking = false, nukeTimer = 0;
         let playerInSafeZone = false;
+        let nukeLaunchTriggered = false;
+        let nukeMesh = null;
+        let rifleOwned = false;
+        let rifleCooldown = 0;
+        const RIFLE_COOLDOWN_MAX = 2.5;
 
         // --- Controls Mapping ---
         const velocity = new THREE.Vector3();
@@ -262,6 +299,13 @@
         const BOBBY_CHASE_MAX = 6.0; // Chases for exactly 6 seconds maximum before giving up
         const BOBBY_COOLDOWN_MAX = 4.0; // Rests for 4 seconds before chasing again
 
+        // Petty structural variables (new pursuer)
+        let petty, pettyName3D;
+        let pettyState = 'WANDER'; // WANDER, CHASE, COOLDOWN
+        let pettyTimer = 0;
+        const PETTY_CHASE_MAX = 5.0;
+        const PETTY_COOLDOWN_MAX = 3.0;
+
         // Mobile Look state
         let mobileJoyX = 0, mobileJoyY = 0;
 
@@ -269,7 +313,10 @@
         const canvasContainer = document.getElementById('canvas-container');
         const promptUI = document.getElementById('interaction-prompt');
         const alertUI = document.getElementById('chest-alert');
+        const rifleStatusUI = document.getElementById('rifle-status');
         const flashOverlay = document.getElementById('flash-overlay');
+        const nukePromptUI = document.getElementById('nuke-prompt');
+        const nukeButton = document.getElementById('nuke-trigger');
 
         function selectDevice(deviceType) {
             document.getElementById('setup-menu').style.display = 'none';
@@ -315,6 +362,7 @@
             spawnChests();
             buildSafeHouses();
             spawnBobby3D();
+            spawnPetty3D();
 
             if(!isMobile) {
                 document.addEventListener('keydown', (e) => handleKeys(e, true));
@@ -326,10 +374,21 @@
             }
             window.addEventListener('resize', onWindowResize);
 
+            bindNukeButton();
             startBuiltInMusic();
             
             gameStarted = true;
             animateLoop();
+        }
+
+        function bindNukeButton() {
+            if (nukeButton.dataset.bound === 'true') return;
+            nukeButton.addEventListener('click', triggerNukeLaunch);
+            nukeButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                triggerNukeLaunch();
+            });
+            nukeButton.dataset.bound = 'true';
         }
 
         function createWorldTerrain() {
@@ -369,6 +428,11 @@
         function spawnChests() {
             const count = 50;
             const nukeIndex = Math.floor(Math.random() * count);
+            const rifleIndexes = new Set();
+            while (rifleIndexes.size < 6) {
+                const candidate = Math.floor(Math.random() * count);
+                if (candidate !== nukeIndex) rifleIndexes.add(candidate);
+            }
             const boxGeo = new THREE.BoxGeometry(1.3, 0.8, 0.8);
             const boxMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.4 }); 
             const lockMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, metalness: 0.8 }); 
@@ -389,7 +453,10 @@
 
                 chest.position.set(cx, 0, cz);
                 chest.rotation.y = Math.random() * Math.PI * 2;
-                chest.userData = { hasNuke: (i === nukeIndex), opened: false };
+                let reward = 'empty';
+                if (i === nukeIndex) reward = 'nuke';
+                else if (rifleIndexes.has(i)) reward = 'rifle';
+                chest.userData = { reward, opened: false };
                 
                 scene.add(chest);
                 chests.push(chest);
@@ -454,7 +521,41 @@
             bobby.add(bobbyName3D);
         }
 
+        function spawnPetty3D() {
+            petty = new THREE.Group();
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 1.0 });
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 12), skinMat); head.position.y = 2.7; petty.add(head);
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1), skinMat); torso.position.y = 2.0; petty.add(torso);
+            const limbGeo = new THREE.CylinderGeometry(0.035, 0.035, 1.0);
+            const armL = new THREE.Mesh(limbGeo, skinMat); armL.position.set(-0.35, 2.05, 0); armL.rotation.z = Math.PI/4; petty.add(armL);
+            const armR = new THREE.Mesh(limbGeo, skinMat); armR.position.set(0.35, 2.05, 0); armR.rotation.z = -Math.PI/4; petty.add(armR);
+            const legL = new THREE.Mesh(limbGeo, skinMat); legL.position.set(-0.18, 0.6, 0); legL.rotation.z = 0.05; petty.add(legL);
+            const legR = new THREE.Mesh(limbGeo, skinMat); legR.position.set(0.18, 0.6, 0); legR.rotation.z = -0.05; petty.add(legR);
+
+            // simple hair using a cone
+            const hair = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 8), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+            hair.position.y = 3.05; hair.rotation.x = Math.PI; petty.add(hair);
+
+            petty.position.set(-90, 0, -90);
+            scene.add(petty);
+
+            const canv2 = document.createElement('canvas'); canv2.width = 256; canv2.height = 64;
+            const c2 = canv2.getContext('2d');
+            c2.fillStyle = 'rgba(40, 120, 255, 0.85)'; c2.fillRect(0,0,256,64);
+            c2.font = 'Bold 32px monospace'; c2.fillStyle = '#fff'; c2.textAlign='center'; c2.textBaseline='middle';
+            c2.fillText('PETTY', 128, 32);
+
+            const tex2 = new THREE.CanvasTexture(canv2);
+            pettyName3D = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.5), new THREE.MeshBasicMaterial({ map: tex2, side: THREE.DoubleSide }));
+            pettyName3D.position.y = 3.5;
+            petty.add(pettyName3D);
+        }
+
         function handleKeys(e, isPressed) {
+            if (isNuking && isPressed && (e.code === 'Space' || e.code === 'Enter')) {
+                triggerNukeLaunch();
+                return;
+            }
             if(isGameOver || isNuking) return;
             switch (e.code) {
                 case 'KeyW': keys.w = isPressed; break;
@@ -462,6 +563,7 @@
                 case 'KeyS': keys.s = isPressed; break;
                 case 'KeyD': keys.d = isPressed; break;
                 case 'KeyE': if(isPressed) interactAction(); break;
+                case 'KeyF': if(isPressed) useRifle(); break;
             }
         }
 
@@ -535,7 +637,15 @@
             });
 
             // Action button execution
-            actBtn.addEventListener('touchstart', (e) => { e.preventDefault(); interactAction(); });
+            actBtn.addEventListener('touchstart', (e) => { e.preventDefault(); handleActionButton(); });
+        }
+
+        function handleActionButton() {
+            if (rifleOwned && (bobbyState === 'CHASE' || pettyState === 'CHASE')) {
+                useRifle();
+            } else {
+                interactAction();
+            }
         }
 
         function interactAction() {
@@ -544,16 +654,109 @@
                 activeChest.children[0].scale.set(1.3, 0.2, 0.8);
                 activeChest.children[0].position.y = 0.1;
 
-                if(activeChest.userData.hasNuke) {
+                if(activeChest.userData.reward === 'nuke') {
                     isNuking = true;
+                    nukeLaunchTriggered = false;
+                    nukeTimer = 0;
+                    nukeMesh = null;
+                    nukeButton.style.display = 'block';
+                    nukePromptUI.style.display = 'block';
                     if(!isMobile) document.exitPointerLock();
                     alertUI.style.color = "#ff1144";
-                    alertUI.innerText = "🚨 TACTICAL NUKE ACQUIRED! DETONATION IN 3s! 🚨";
+                    alertUI.innerText = "🚨 TACTICAL NUKE ACQUIRED! PRESS THE BUTTON! 🚨";
+                } else if (activeChest.userData.reward === 'rifle') {
+                    rifleOwned = true;
+                    updateRifleStatus();
+                    alertUI.style.color = "#7cff83";
+                    alertUI.innerText = "🔫 Rifle acquired! Press F to stun a chasing monster.";
+                    setTimeout(() => alertUI.innerText = "", 3500);
                 } else {
                     alertUI.innerText = "Chest contained nothing... keep searching!";
                     setTimeout(() => alertUI.innerText = "", 2500);
                 }
             }
+        }
+
+        function updateRifleStatus() {
+            if (!rifleOwned) {
+                rifleStatusUI.innerText = 'Rifle: Not Found';
+                return;
+            }
+            if (rifleCooldown > 0) {
+                rifleStatusUI.innerText = 'Rifle: Reloading';
+            } else {
+                rifleStatusUI.innerText = 'Rifle: Ready (F)';
+            }
+        }
+
+        function useRifle() {
+            if (!rifleOwned) {
+                alertUI.style.color = '#ffeb3b';
+                alertUI.innerText = 'The rifle is still hidden somewhere in the forest.';
+                setTimeout(() => alertUI.innerText = '', 2200);
+                return;
+            }
+            if (rifleCooldown > 0) {
+                alertUI.style.color = '#ffeb3b';
+                alertUI.innerText = 'Rifle is reloading.';
+                setTimeout(() => alertUI.innerText = '', 1800);
+                return;
+            }
+
+            let stunnedAny = false;
+            if (bobbyState === 'CHASE') {
+                bobbyState = 'COOLDOWN';
+                bobbyTimer = 0;
+                stunnedAny = true;
+            }
+            if (pettyState === 'CHASE') {
+                pettyState = 'COOLDOWN';
+                pettyTimer = 0;
+                stunnedAny = true;
+            }
+
+            if (!stunnedAny) {
+                alertUI.style.color = '#ffeb3b';
+                alertUI.innerText = 'No monster is chasing you right now.';
+                setTimeout(() => alertUI.innerText = '', 2200);
+                return;
+            }
+
+            rifleCooldown = RIFLE_COOLDOWN_MAX;
+            updateRifleStatus();
+            alertUI.style.color = '#ffffff';
+            alertUI.innerText = '🔫 Rifle blast stunned the monster!';
+            setTimeout(() => alertUI.innerText = '', 2400);
+        }
+
+        function triggerNukeLaunch() {
+            if (!isNuking || nukeLaunchTriggered) return;
+            nukeLaunchTriggered = true;
+            nukeButton.style.display = 'none';
+            nukePromptUI.style.display = 'none';
+
+            nukeMesh = new THREE.Group();
+            const body = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.18, 0.18, 1.2, 10),
+                new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.9, roughness: 0.2 })
+            );
+            body.rotation.z = Math.PI / 2;
+
+            const nose = new THREE.Mesh(
+                new THREE.ConeGeometry(0.2, 0.55, 10),
+                new THREE.MeshStandardMaterial({ color: 0xff3300, emissive: 0xff3300, emissiveIntensity: 0.6 })
+            );
+            nose.position.x = 0.7;
+
+            const fins = new THREE.Mesh(
+                new THREE.BoxGeometry(0.08, 0.5, 0.25),
+                new THREE.MeshStandardMaterial({ color: 0x222222 })
+            );
+            fins.position.set(-0.35, 0, 0);
+
+            nukeMesh.add(body, nose, fins);
+            nukeMesh.position.copy(camera.position).add(new THREE.Vector3(0, 0.5, 0));
+            scene.add(nukeMesh);
         }
 
         function startBuiltInMusic() {
@@ -601,10 +804,19 @@
 
             processMovement(delta);
             processEnvironmentCycle(delta);
+            processRifleCooldown(delta);
             evaluateInteractions();
             processBobbyAI(delta);
+            processPettyAI(delta);
 
             renderer.render(scene, camera);
+        }
+
+        function processRifleCooldown(delta) {
+            if (rifleCooldown > 0) {
+                rifleCooldown = Math.max(0, rifleCooldown - delta);
+                updateRifleStatus();
+            }
         }
 
         function processMovement(delta) {
@@ -619,13 +831,13 @@
                 const camEuler = new THREE.Euler(0, cameraRotation.y, 0, 'YXZ');
                 const forwardMove = new THREE.Vector3(inputDir.x, 0, -inputDir.z).applyEuler(camEuler);
                 
-                if (keys.w || keys.s) velocity.z -= forwardMove.z * 110.0 * delta;
-                if (keys.a || keys.d) velocity.x += forwardMove.x * 110.0 * delta;
+                if (keys.w || keys.s) velocity.z -= forwardMove.z * 180.0 * delta;
+                if (keys.a || keys.d) velocity.x += forwardMove.x * 180.0 * delta;
             } else {
                 const camEuler = new THREE.Euler(0, cameraRotation.y, 0, 'YXZ');
                 const touchMove = new THREE.Vector3(mobileJoyX, 0, mobileJoyY).applyEuler(camEuler);
-                velocity.x += touchMove.x * 12.0 * delta;
-                velocity.z += touchMove.z * 12.0 * delta;
+                velocity.x += touchMove.x * 20.0 * delta;
+                velocity.z += touchMove.z * 20.0 * delta;
             }
 
             camera.position.addScaledVector(velocity, delta);
@@ -743,19 +955,87 @@
             }
         }
 
+        function processPettyAI(delta) {
+            if(!petty) return;
+            const playerPos = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+            if(pettyName3D) pettyName3D.lookAt(camera.position);
+
+            const distance = petty.position.distanceTo(playerPos);
+
+            switch(pettyState) {
+                case 'WANDER':
+                    petty.lookAt(playerPos);
+                    if(!playerInSafeZone && distance < 55) {
+                        pettyState = 'CHASE';
+                        pettyTimer = 0;
+                    } else {
+                        const wanderDir = new THREE.Vector3(Math.cos(timeOfDay*1.3), 0, Math.sin(timeOfDay*1.3)).normalize();
+                        petty.position.addScaledVector(wanderDir, 4.0 * delta);
+                    }
+                    break;
+
+                case 'CHASE':
+                    petty.lookAt(playerPos);
+                    const chaseDir = playerPos.clone().sub(petty.position).normalize();
+                    petty.position.addScaledVector(chaseDir, 14.0 * delta);
+
+                    pettyTimer += delta;
+                    if(playerInSafeZone || pettyTimer >= PETTY_CHASE_MAX) {
+                        pettyState = 'COOLDOWN';
+                        pettyTimer = 0;
+                        alertUI.style.color = '#ffaaee';
+                        alertUI.innerText = 'Petty lost interest for now...';
+                        setTimeout(() => alertUI.innerText = '', 2500);
+                    }
+
+                    if(distance < 4.5 && !playerInSafeZone) {
+                        sanity -= delta * 45.0;
+                    }
+                    break;
+
+                case 'COOLDOWN':
+                    const fleeDir2 = petty.position.clone().sub(playerPos).normalize();
+                    petty.position.addScaledVector(fleeDir2, 5.0 * delta);
+
+                    pettyTimer += delta;
+                    if(pettyTimer >= PETTY_COOLDOWN_MAX) {
+                        pettyState = 'WANDER';
+                    }
+                    break;
+            }
+        }
+
         function processNukeScene(delta) {
             nukeTimer += delta;
-            if(nukeTimer < 3.0) {
+
+            if (!nukeLaunchTriggered) {
                 camera.position.x += (Math.random() - 0.5) * 0.4;
                 camera.position.y += (Math.random() - 0.5) * 0.4;
-                
                 ambientLight.intensity += delta * 35;
                 bobby.visible = false;
+                nukeButton.style.display = 'block';
+                nukePromptUI.style.display = 'block';
                 renderer.render(scene, camera);
-            } else if (nukeTimer >= 3.0 && nukeTimer < 4.5) {
-                flashOverlay.style.opacity = (nukeTimer - 3.0) / 1.5;
-            } else {
-                document.getElementById('victory').style.display = 'flex';
+                return;
+            }
+
+            if (nukeMesh) {
+                nukeMesh.position.y += delta * 55;
+                nukeMesh.position.x += Math.sin(nukeTimer * 2.5) * 0.12;
+                nukeMesh.position.z += Math.cos(nukeTimer * 2.5) * 0.12;
+                nukeMesh.rotation.x += delta * 8;
+
+                if (nukeMesh.position.y > 110) {
+                    scene.remove(nukeMesh);
+                    nukeMesh = null;
+                    bobby.visible = false;
+                    bobbyName3D.visible = false;
+                    if(petty) { petty.visible = false; if(pettyName3D) pettyName3D.visible = false; }
+                    flashOverlay.style.opacity = 1;
+                    document.getElementById('victory').style.display = 'flex';
+                } else {
+                    flashOverlay.style.opacity = Math.min(0.55, nukeMesh.position.y / 180);
+                }
             }
         }
 
