@@ -192,6 +192,43 @@
             z-index: 16;
         }
 
+        #hotbar {
+            position: absolute;
+            left: 50%;
+            bottom: 24px;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 18;
+            pointer-events: none;
+        }
+        .hotbar-slot {
+            width: 72px;
+            height: 72px;
+            border: 3px solid rgba(255,255,255,0.7);
+            border-radius: 12px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 4px 4px 0px #000;
+            opacity: 0.45;
+            pointer-events: auto;
+        }
+        .hotbar-slot.active {
+            border-color: #ffeb3b;
+            opacity: 1;
+            box-shadow: 0 0 0 3px rgba(255,235,59,0.35), 4px 4px 0px #000;
+        }
+        .hotbar-slot.drawn {
+            border-color: #7cff83;
+            transform: translateY(-6px);
+        }
+
         #mobile-arrows {
             position: absolute;
             right: 24px;
@@ -267,6 +304,10 @@
         </div>
         <div id="touch-look-zone"></div>
         <div id="action-button">USE</div>
+        <div id="hotbar">
+            <div class="hotbar-slot" id="slot-rifle">RIFLE</div>
+            <div class="hotbar-slot" id="slot-food">FOOD</div>
+        </div>
         <div id="mobile-arrows">
             <button class="mobile-arrow-btn" data-dir="up">▲</button>
             <button class="mobile-arrow-btn" data-dir="left">◀</button>
@@ -288,13 +329,10 @@
         <div class="bar-container">
             <div id="sanity-bar"></div>
         </div>
-        <div id="rifle-status" style="margin-top: 12px; color: #7cff83; font-weight: bold;">Rifle: Not Found</div>
-        <div id="chest-alert" style="margin-top: 15px; color: #ffeb3b; font-weight: bold;"></div>
-    </div>
-
-    <div id="victory" class="screen-overlay">
-        <h1 style="color: #ff1144; font-size: 3rem; margin: 0; text-shadow: 4px 4px 0px #000;">TACTICAL NUKE DETONATED</h1>
-        <p id="victory-message" style="font-size: 1.3rem; font-weight: bold; margin-top: 10px;">The mushroom cloud swallowed Bobby whole. You win.</p>
+        <div style="margin-top: 10px;">Hunger:</div>
+        <div class="bar-container">
+            <div id="hunger-bar" style="background: #ffb347;"></div>
+        </div>
         <button class="menu-btn" onclick="location.reload()" style="background: black; color: white; border-color: black;">Play Again</button>
     </div>
 
@@ -309,7 +347,7 @@
         let prevTime = performance.now();
 
         // --- Gameplay States ---
-        let sanity = 100, nightCounter = 1, timeOfDay = 0;
+        let sanity = 100, hunger = 100, nightCounter = 1, timeOfDay = 0;
         let isGameOver = false, isNuking = false, nukeTimer = 0;
         let playerInSafeZone = false;
         let nukeLaunchTriggered = false;
@@ -324,8 +362,12 @@
         let mobileDirection = { up: false, down: false, left: false, right: false };
         let rifleOwned = false;
         let rifleCooldown = 0;
+        let inventory = { rifle: false, food: false };
+        let selectedHotbarItem = null;
+        let hotbarItemDrawn = false;
         const RIFLE_COOLDOWN_MAX = 2.5;
         const STUN_DURATION = 10.0;
+        const HUNGER_DRAIN_RATE = 2.4;
         let bobbyStunnedUntil = 0;
         let pettyStunnedUntil = 0;
 
@@ -362,6 +404,11 @@
         const promptUI = document.getElementById('interaction-prompt');
         const alertUI = document.getElementById('chest-alert');
         const rifleStatusUI = document.getElementById('rifle-status');
+        const hungerBarUI = document.getElementById('hunger-bar');
+        const hotbarSlots = {
+            rifle: document.getElementById('slot-rifle'),
+            food: document.getElementById('slot-food')
+        };
         const flashOverlay = document.getElementById('flash-overlay');
         const nukePromptUI = document.getElementById('nuke-prompt');
         const nukeButton = document.getElementById('nuke-trigger');
@@ -475,11 +522,15 @@
 
         function spawnChests() {
             const count = 50;
-            const nukeIndex = Math.floor(Math.random() * count);
+            const foodIndex = 19;
+            let nukeIndex = Math.floor(Math.random() * count);
+            while (nukeIndex === foodIndex) {
+                nukeIndex = Math.floor(Math.random() * count);
+            }
             const rifleIndexes = new Set();
             while (rifleIndexes.size < 6) {
                 const candidate = Math.floor(Math.random() * count);
-                if (candidate !== nukeIndex) rifleIndexes.add(candidate);
+                if (candidate !== nukeIndex && candidate !== foodIndex) rifleIndexes.add(candidate);
             }
             const boxGeo = new THREE.BoxGeometry(1.3, 0.8, 0.8);
             const boxMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.4 }); 
@@ -502,7 +553,8 @@
                 chest.position.set(cx, 0, cz);
                 chest.rotation.y = Math.random() * Math.PI * 2;
                 let reward = 'empty';
-                if (i === nukeIndex) reward = 'nuke';
+                if (i === foodIndex) reward = 'food';
+                else if (i === nukeIndex) reward = 'nuke';
                 else if (rifleIndexes.has(i)) reward = 'rifle';
                 chest.userData = { reward, opened: false };
                 
@@ -611,7 +663,8 @@
                 case 'ArrowDown': keys.down = isPressed; break;
                 case 'ArrowRight': keys.right = isPressed; break;
                 case 'KeyE': if(isPressed) interactAction(); break;
-                case 'KeyF': if(isPressed) useRifle(); break;
+                case 'KeyF': if(isPressed) handleHotbarAction(); break;
+                case 'KeyQ': if(isPressed) cycleHotbarItem(); break;
             }
         }
 
@@ -706,11 +759,91 @@
         }
 
         function handleActionButton() {
-            if (rifleOwned && (bobbyState === 'CHASE' || pettyState === 'CHASE')) {
-                useRifle();
-            } else {
-                interactAction();
+            handleHotbarAction();
+        }
+
+        function updateHotbarUI() {
+            Object.values(hotbarSlots).forEach(slot => {
+                slot.classList.remove('active', 'drawn');
+            });
+
+            if (!selectedHotbarItem) return;
+
+            const activeSlot = hotbarSlots[selectedHotbarItem];
+            if (!activeSlot) return;
+            activeSlot.classList.add('active');
+            if (hotbarItemDrawn) activeSlot.classList.add('drawn');
+
+            hotbarSlots.rifle.style.opacity = inventory.rifle ? '1' : '0.35';
+            hotbarSlots.food.style.opacity = inventory.food ? '1' : '0.35';
+        }
+
+        function cycleHotbarItem() {
+            const available = [];
+            if (inventory.rifle) available.push('rifle');
+            if (inventory.food) available.push('food');
+            if (!available.length) {
+                selectedHotbarItem = null;
+                hotbarItemDrawn = false;
+                updateHotbarUI();
+                return;
             }
+
+            const currentIndex = selectedHotbarItem ? available.indexOf(selectedHotbarItem) : -1;
+            const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % available.length;
+            selectedHotbarItem = available[nextIndex];
+            hotbarItemDrawn = false;
+            updateHotbarUI();
+        }
+
+        function handleHotbarAction() {
+            if (activeChest && !activeChest.userData.opened) {
+                interactAction();
+                return;
+            }
+
+            if (!selectedHotbarItem) {
+                alertUI.style.color = '#ffeb3b';
+                alertUI.innerText = 'No item is selected in your hotbar.';
+                setTimeout(() => alertUI.innerText = '', 2200);
+                return;
+            }
+
+            if (!hotbarItemDrawn) {
+                hotbarItemDrawn = true;
+                updateHotbarUI();
+                const label = selectedHotbarItem === 'rifle' ? 'Rifle pulled out.' : 'Food pulled out.';
+                alertUI.style.color = '#ffffff';
+                alertUI.innerText = label;
+                setTimeout(() => alertUI.innerText = '', 1800);
+                return;
+            }
+
+            if (selectedHotbarItem === 'rifle') {
+                useRifle();
+            } else if (selectedHotbarItem === 'food') {
+                consumeFood();
+            }
+        }
+
+        function consumeFood() {
+            if (!inventory.food) {
+                alertUI.style.color = '#ffeb3b';
+                alertUI.innerText = 'You do not have food in your hotbar.';
+                setTimeout(() => alertUI.innerText = '', 2200);
+                return;
+            }
+
+            hunger = Math.min(100, hunger + 35);
+            inventory.food = false;
+            hotbarItemDrawn = false;
+            if (selectedHotbarItem === 'food') {
+                selectedHotbarItem = inventory.rifle ? 'rifle' : null;
+            }
+            updateHotbarUI();
+            alertUI.style.color = '#ffb347';
+            alertUI.innerText = 'You ate the food.';
+            setTimeout(() => alertUI.innerText = '', 2200);
         }
 
         function interactAction() {
@@ -731,10 +864,24 @@
                     alertUI.innerText = "🚨 TACTICAL NUKE ACQUIRED! PRESS THE BUTTON! 🚨";
                 } else if (activeChest.userData.reward === 'rifle') {
                     rifleOwned = true;
+                    inventory.rifle = true;
+                    if (!selectedHotbarItem) selectedHotbarItem = 'rifle';
+                    hotbarItemDrawn = false;
                     updateRifleStatus();
+                    updateHotbarUI();
                     alertUI.style.color = "#7cff83";
-                    alertUI.innerText = "🔫 Rifle acquired! Press F to stun a chasing monster.";
+                    alertUI.innerText = "🔫 Rifle acquired! Pull it from your hotbar to fire it.";
                     setTimeout(() => alertUI.innerText = "", 3500);
+                } else if (activeChest.userData.reward === 'food') {
+                    inventory.food = true;
+                    if (!selectedHotbarItem) selectedHotbarItem = 'food';
+                    hotbarItemDrawn = false;
+                    updateHotbarUI();
+                    hunger = Math.min(100, hunger + 45);
+                    updateHungerStatus();
+                    alertUI.style.color = "#ffb347";
+                    alertUI.innerText = "🍖 Found food! Pull it from your hotbar to eat it.";
+                    setTimeout(() => alertUI.innerText = "", 3000);
                 } else {
                     alertUI.innerText = "Chest contained nothing... keep searching!";
                     setTimeout(() => alertUI.innerText = "", 2500);
@@ -754,11 +901,24 @@
             }
         }
 
+        function updateHungerStatus() {
+            hunger = Math.max(0, Math.min(100, hunger));
+            hungerBarUI.style.width = hunger + '%';
+        }
+
         function useRifle() {
-            if (!rifleOwned) {
+            if (!rifleOwned || !inventory.rifle || selectedHotbarItem !== 'rifle') {
                 alertUI.style.color = '#ffeb3b';
-                alertUI.innerText = 'The rifle is still hidden somewhere in the forest.';
+                alertUI.innerText = 'Pull the rifle from your hotbar before firing.';
                 setTimeout(() => alertUI.innerText = '', 2200);
+                return;
+            }
+            if (!hotbarItemDrawn) {
+                hotbarItemDrawn = true;
+                updateHotbarUI();
+                alertUI.style.color = '#ffffff';
+                alertUI.innerText = 'Rifle pulled out.';
+                setTimeout(() => alertUI.innerText = '', 1800);
                 return;
             }
             if (rifleCooldown > 0) {
@@ -890,6 +1050,7 @@
 
             processMovement(delta);
             processEnvironmentCycle(delta);
+            processHunger(delta);
             processRifleCooldown(delta);
             processStunTimers(delta);
             evaluateInteractions();
@@ -937,8 +1098,8 @@
                 const arrowMoveX = Number(mobileDirection.right) - Number(mobileDirection.left);
                 const arrowMoveZ = Number(mobileDirection.down) - Number(mobileDirection.up);
                 const touchMove = new THREE.Vector3(mobileJoyX + arrowMoveX * 0.9, 0, mobileJoyY + arrowMoveZ * 0.9).applyEuler(camEuler);
-                velocity.x += touchMove.x * 20.0 * delta;
-                velocity.z += touchMove.z * 20.0 * delta;
+                velocity.x += touchMove.x * 24.0 * delta;
+                velocity.z += touchMove.z * 24.0 * delta;
             }
 
             camera.position.addScaledVector(velocity, delta);
@@ -980,6 +1141,24 @@
                 if(!isMobile) document.exitPointerLock();
                 document.getElementById('game-over').style.display = 'flex';
             }
+        }
+
+        function processHunger(delta) {
+            hunger -= delta * HUNGER_DRAIN_RATE;
+            updateHungerStatus();
+
+            if (hunger <= 0) {
+                triggerHungerDeath();
+            }
+        }
+
+        function triggerHungerDeath() {
+            if (isGameOver || isDeathCutscene || isNuking) return;
+            isGameOver = true;
+            if (!isMobile) document.exitPointerLock();
+            document.getElementById('game-over').style.display = 'flex';
+            document.getElementById('death-title').innerText = 'YOU STARVED TO DEATH';
+            document.getElementById('death-message').innerText = 'Your hunger dropped to zero. You collapsed in the dark. Restart and try again.';
         }
 
         function evaluateInteractions() {
