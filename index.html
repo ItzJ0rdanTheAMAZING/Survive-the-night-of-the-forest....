@@ -324,7 +324,7 @@
 
     <div id="ui">
         <div id="day-counter" style="color: #ff3355; font-weight: bold;">Night: 1/99</div>
-        <div id="time-of-day">Time: Evening</div>
+        <div id="time-of-day">Time: Morning 🌅</div>
         <div style="margin-top: 10px;">Sanity:</div>
         <div class="bar-container">
             <div id="sanity-bar"></div>
@@ -333,6 +333,13 @@
         <div class="bar-container">
             <div id="hunger-bar" style="background: #8b5a2b;"></div>
         </div>
+        <div id="rifle-status" style="margin-top: 12px; color: #7cff83; font-weight: bold;">Rifle: Not Found</div>
+        <div id="chest-alert" style="margin-top: 15px; color: #ffeb3b; font-weight: bold;"></div>
+    </div>
+
+    <div id="victory" class="screen-overlay">
+        <h1 style="color: #ff1144; font-size: 3rem; margin: 0; text-shadow: 4px 4px 0px #000;">TACTICAL NUKE DETONATED</h1>
+        <p id="victory-message" style="font-size: 1.3rem; font-weight: bold; margin-top: 10px;">The mushroom cloud swallowed Bobby whole. You win.</p>
         <button class="menu-btn" onclick="location.reload()" style="background: black; color: white; border-color: black;">Play Again</button>
     </div>
 
@@ -466,7 +473,7 @@
                 document.addEventListener('mousemove', handleMouseLook);
             } else {
                 setupMobileInput();
-V
+            }
             window.addEventListener('resize', onWindowResize);
 
             bindNukeButton();
