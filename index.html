@@ -331,7 +331,7 @@
         </div>
         <div style="margin-top: 10px;">Hunger:</div>
         <div class="bar-container">
-            <div id="hunger-bar" style="background: #ffb347;"></div>
+            <div id="hunger-bar" style="background: #8b5a2b;"></div>
         </div>
         <button class="menu-btn" onclick="location.reload()" style="background: black; color: white; border-color: black;">Play Again</button>
     </div>
@@ -1123,9 +1123,8 @@
                 document.getElementById('time-of-day').innerText = "Time: Midnight 🌘";
                 scene.background.setHex(0x010403); scene.fog.color.setHex(0x010403);
                 hemiLight.intensity = 0.05; flashlight.intensity = 4.5;
-                if(!playerInSafeZone) sanity -= delta * 3.5; 
             } else {
-                document.getElementById('time-of-day').innerText = "Time: Twilight 🌅";
+                document.getElementById('time-of-day').innerText = "Time: Morning 🌅";
                 scene.background.setHex(0x051a14); scene.fog.color.setHex(0x051a14);
                 hemiLight.intensity = 0.4; flashlight.intensity = 0.8;
                 if(sanity < 100) sanity += delta * 5.0; 
