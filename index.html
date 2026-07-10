@@ -466,11 +466,12 @@
                 document.addEventListener('mousemove', handleMouseLook);
             } else {
                 setupMobileInput();
-            }
+V
             window.addEventListener('resize', onWindowResize);
 
             bindNukeButton();
             startBuiltInMusic();
+            updateHungerStatus();
             
             gameStarted = true;
             animateLoop();
