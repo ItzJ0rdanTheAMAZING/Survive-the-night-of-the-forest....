@@ -68,6 +68,7 @@
             border: 3px solid #fff;
             margin-top: 5px;
             box-shadow: 5px 5px 0px #000;
+            overflow: hidden;
         }
         #sanity-bar {
             width: 100%;
@@ -333,7 +334,18 @@
         <div class="bar-container">
             <div id="hunger-bar" style="background: #8b5a2b;"></div>
         </div>
+        <div style="margin-top: 10px;">Stamina:</div>
+        <div class="bar-container">
+            <div id="stamina-bar" style="background: #00ccff;"></div>
+        </div>
         <div id="rifle-status" style="margin-top: 12px; color: #7cff83; font-weight: bold;">Rifle: Not Found</div>
+        <div id="mission-status" style="margin-top: 12px; color: #ffeb3b; font-weight: bold;"></div>
+        <div id="weather-status" style="margin-top: 12px; color: #aabbff; font-weight: bold;"></div>
+        <div id="consumables-display" style="margin-top: 12px; color: #00ff88; font-weight: bold; font-size: 0.85rem;">
+            <div>🥫 Food: <span id="food-count">0</span></div>
+            <div>💊 Medkit: <span id="medkit-count">0</span></div>
+            <div>☕ Coffee: <span id="coffee-count">0</span></div>
+        </div>
         <div id="chest-alert" style="margin-top: 15px; color: #ffeb3b; font-weight: bold;"></div>
     </div>
 
@@ -377,6 +389,63 @@
         const HUNGER_DRAIN_RATE = 2.4;
         let bobbyStunnedUntil = 0;
         let pettyStunnedUntil = 0;
+        let bobbyChaseAlerted = false;
+        let pettyChaseAlerted = false;
+        let nukeDescentStarted = false;
+        let nukeFearTimer = 0;
+
+        // --- NEW SYSTEMS: Stamina, Consumables, Traps, Weather, Missions ---
+        let stamina = 100;
+        let isSprinting = false;
+        const SPRINT_SPEED_MULT = 1.8;
+        const STAMINA_DRAIN_RATE = 35;
+        const STAMINA_REGEN_RATE = 20;
+        
+        // Consumables inventory
+        let consumables = { food: 0, medkit: 0, coffee: 0 };
+        const FOOD_HEAL_HUNGER = 40;
+        const MEDKIT_HEAL_SANITY = 50;
+        const COFFEE_RESTORE_STAMINA = 80;
+        
+        // Traps system
+        let traps = [];
+        let canPlaceTrap = true;
+        const TRAP_COOLDOWN = 1.5;
+        let trapCooldownTimer = 0;
+        const MAX_TRAPS = 3;
+        
+        // Weather system
+        let currentWeather = 'clear';
+        let weatherTimer = 0;
+        let weatherDuration = 30;
+        const WEATHER_TYPES = ['clear', 'rain', 'fog', 'storm'];
+        
+        // Mission system
+        let currentMission = 'survive';
+        let missionProgress = 0;
+        let missionTarget = 5;
+        
+        // Progression/Unlocks
+        let gamesWon = 0;
+        let unlockedItems = { advancedRifle: false, speedBoots: false };
+        
+        // Day-specific events
+        let dayEvents = [];
+        let eventTimer = 0;
+        
+        // Safe houses
+        let safeHouses = [];
+        let currentSafeHouse = null;
+        
+        // Michelo enemy
+        let michelo = null;
+        let micheloName3D = null;
+        let micheloState = 'WANDER';
+        let micheloTimer = 0;
+        const MICHELO_CHASE_MAX = 5.5;
+        const MICHELO_COOLDOWN_MAX = 3.5;
+        let micheloStunnedUntil = 0;
+        let micheloChaseAlerted = false;
 
         // --- Controls Mapping ---
         const velocity = new THREE.Vector3();
@@ -465,6 +534,7 @@
             buildSafeHouses();
             spawnBobby3D();
             spawnPetty3D();
+            spawnMichelo3D();
 
             if(!isMobile) {
                 document.addEventListener('keydown', (e) => handleKeys(e, true));
@@ -479,6 +549,10 @@
             bindNukeButton();
             startBuiltInMusic();
             updateHungerStatus();
+            updateStaminaBar();
+            updateConsumablesDisplay();
+            updateMissionStatus();
+            updateWeatherStatus();
             
             gameStarted = true;
             animateLoop();
@@ -529,16 +603,18 @@
         }
 
         function spawnChests() {
-            const count = 50;
+            const count = 60;
             const foodIndex = 19;
+            const medkitIndex = 35;
+            const coffeeIndex = 47;
             let nukeIndex = Math.floor(Math.random() * count);
-            while (nukeIndex === foodIndex) {
+            while (nukeIndex === foodIndex || nukeIndex === medkitIndex || nukeIndex === coffeeIndex) {
                 nukeIndex = Math.floor(Math.random() * count);
             }
             const rifleIndexes = new Set();
-            while (rifleIndexes.size < 6) {
+            while (rifleIndexes.size < 8) {
                 const candidate = Math.floor(Math.random() * count);
-                if (candidate !== nukeIndex && candidate !== foodIndex) rifleIndexes.add(candidate);
+                if (candidate !== nukeIndex && candidate !== foodIndex && candidate !== medkitIndex && candidate !== coffeeIndex) rifleIndexes.add(candidate);
             }
             const boxGeo = new THREE.BoxGeometry(1.3, 0.8, 0.8);
             const boxMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.4 }); 
@@ -562,6 +638,8 @@
                 chest.rotation.y = Math.random() * Math.PI * 2;
                 let reward = 'empty';
                 if (i === foodIndex) reward = 'food';
+                else if (i === medkitIndex) reward = 'medkit';
+                else if (i === coffeeIndex) reward = 'coffee';
                 else if (i === nukeIndex) reward = 'nuke';
                 else if (rifleIndexes.has(i)) reward = 'rifle';
                 chest.userData = { reward, opened: false };
@@ -659,6 +737,50 @@
             petty.add(pettyName3D);
         }
 
+        function spawnMichelo3D() {
+            michelo = new THREE.Group();
+            const voidMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 1.0 }); 
+            
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), voidMat); head.position.y = 2.9; michelo.add(head);
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.4), voidMat); torso.position.y = 2.0; michelo.add(torso);
+            
+            const limbGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.1);
+            const armL = new THREE.Mesh(limbGeo, voidMat); armL.position.set(-0.4, 2.1, 0); armL.rotation.z = Math.PI/4; michelo.add(armL);
+            const armR = new THREE.Mesh(limbGeo, voidMat); armR.position.set(0.4, 2.1, 0); armR.rotation.z = -Math.PI/4; michelo.add(armR);
+            
+            const legL = new THREE.Mesh(limbGeo, voidMat); legL.position.set(-0.25, 0.7, 0); legL.rotation.z = 0.1; michelo.add(legL);
+            const legR = new THREE.Mesh(limbGeo, voidMat); legR.position.set(0.25, 0.7, 0); legR.rotation.z = -0.1; michelo.add(legR);
+
+            // Blue and red hat
+            const hatBrim = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.5, 0.5, 0.1, 16),
+                new THREE.MeshStandardMaterial({ color: 0x0055ff })
+            );
+            hatBrim.position.y = 3.5;
+            michelo.add(hatBrim);
+
+            const hatTop = new THREE.Mesh(
+                new THREE.ConeGeometry(0.35, 0.8, 16),
+                new THREE.MeshStandardMaterial({ color: 0xff2200 })
+            );
+            hatTop.position.y = 4.2;
+            michelo.add(hatTop);
+
+            michelo.position.set(-120, 0, 120);
+            scene.add(michelo);
+
+            const canv3 = document.createElement('canvas'); canv3.width = 256; canv3.height = 64;
+            const c3 = canv3.getContext('2d');
+            c3.fillStyle = 'rgba(100, 50, 200, 0.8)'; c3.fillRect(0,0,256,64);
+            c3.font = 'Bold 36px monospace'; c3.fillStyle = '#fff'; c3.textAlign='center'; c3.textBaseline='middle';
+            c3.fillText('MICHELO', 128, 32);
+
+            const tex3 = new THREE.CanvasTexture(canv3);
+            micheloName3D = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.625), new THREE.MeshBasicMaterial({ map: tex3, side: THREE.DoubleSide }));
+            micheloName3D.position.y = 3.7;
+            michelo.add(micheloName3D);
+        }
+
         function handleKeys(e, isPressed) {
             if (isNuking && isPressed && (e.code === 'Space' || e.code === 'Enter')) {
                 triggerNukeLaunch();
@@ -673,7 +795,20 @@
                 case 'KeyE': if(isPressed) interactAction(); break;
                 case 'KeyF': if(isPressed) handleHotbarAction(); break;
                 case 'KeyQ': if(isPressed) cycleHotbarItem(); break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    isSprinting = isPressed && (keys.w || keys.up); 
+                    break;
+                case 'Digit1': if(isPressed) consumeItem('food'); break;
+                case 'Digit2': if(isPressed) consumeItem('medkit'); break;
+                case 'Digit3': if(isPressed) consumeItem('coffee'); break;
+                case 'KeyT': if(isPressed) placeTrap(); break;
             }
+            // Handle WASD for movement
+            if (e.code === 'KeyW') keys.w = isPressed;
+            if (e.code === 'KeyA') keys.a = isPressed;
+            if (e.code === 'KeyS') keys.s = isPressed;
+            if (e.code === 'KeyD') keys.d = isPressed;
         }
 
         function handleMouseLook(e) {
@@ -881,14 +1016,22 @@
                     alertUI.innerText = "🔫 Rifle acquired! Pull it from your hotbar to fire it.";
                     setTimeout(() => alertUI.innerText = "", 3500);
                 } else if (activeChest.userData.reward === 'food') {
-                    inventory.food = true;
-                    if (!selectedHotbarItem) selectedHotbarItem = 'food';
-                    hotbarItemDrawn = false;
-                    updateHotbarUI();
-                    hunger = Math.min(100, hunger + 45);
-                    updateHungerStatus();
+                    consumables.food += 2;
+                    updateConsumablesDisplay();
                     alertUI.style.color = "#ffb347";
-                    alertUI.innerText = "🍖 Found food! Pull it from your hotbar to eat it.";
+                    alertUI.innerText = "🥫 Found food x2! Press 1 to eat (or check hotbar).";
+                    setTimeout(() => alertUI.innerText = "", 3000);
+                } else if (activeChest.userData.reward === 'medkit') {
+                    consumables.medkit += 1;
+                    updateConsumablesDisplay();
+                    alertUI.style.color = "#ff00ff";
+                    alertUI.innerText = "💊 Found medkit! Press 2 to use (heals sanity).";
+                    setTimeout(() => alertUI.innerText = "", 3000);
+                } else if (activeChest.userData.reward === 'coffee') {
+                    consumables.coffee += 1;
+                    updateConsumablesDisplay();
+                    alertUI.style.color = "#aa6600";
+                    alertUI.innerText = "☕ Found coffee! Press 3 to drink (restores stamina).";
                     setTimeout(() => alertUI.innerText = "", 3000);
                 } else {
                     alertUI.innerText = "Chest contained nothing... keep searching!";
@@ -912,6 +1055,72 @@
         function updateHungerStatus() {
             hunger = Math.max(0, Math.min(100, hunger));
             hungerBarUI.style.width = hunger + '%';
+        }
+
+        function updateStaminaBar() {
+            const staminaBar = document.getElementById('stamina-bar');
+            stamina = Math.max(0, Math.min(100, stamina));
+            staminaBar.style.width = stamina + '%';
+        }
+
+        function consumeItem(type) {
+            if (type === 'food' && consumables.food > 0) {
+                consumables.food--;
+                hunger = Math.min(100, hunger + FOOD_HEAL_HUNGER);
+                updateHungerStatus();
+                alertUI.style.color = '#00ff88';
+                alertUI.innerText = '🥫 Ate food! Hunger restored.';
+                setTimeout(() => alertUI.innerText = '', 2000);
+            } else if (type === 'medkit' && consumables.medkit > 0) {
+                consumables.medkit--;
+                sanity = Math.min(100, sanity + MEDKIT_HEAL_SANITY);
+                alertUI.style.color = '#ff00ff';
+                alertUI.innerText = '💊 Used medkit! Sanity restored.';
+                setTimeout(() => alertUI.innerText = '', 2000);
+            } else if (type === 'coffee' && consumables.coffee > 0) {
+                consumables.coffee--;
+                stamina = Math.min(100, stamina + COFFEE_RESTORE_STAMINA);
+                alertUI.style.color = '#aa6600';
+                alertUI.innerText = '☕ Drank coffee! Stamina restored.';
+                setTimeout(() => alertUI.innerText = '', 2000);
+            }
+            updateConsumablesDisplay();
+        }
+
+        function placeTrap() {
+            if (traps.length >= MAX_TRAPS || !canPlaceTrap || playerInSafeZone) return;
+            canPlaceTrap = false;
+            trapCooldownTimer = TRAP_COOLDOWN;
+            
+            const trapPos = camera.position.clone().add(new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).multiplyScalar(2));
+            traps.push({ pos: trapPos, active: true, cooldown: 0 });
+            
+            alertUI.style.color = '#ffff00';
+            alertUI.innerText = `🪤 Trap placed! (${traps.length}/${MAX_TRAPS})`;
+            setTimeout(() => alertUI.innerText = '', 2000);
+        }
+
+        function updateConsumablesDisplay() {
+            document.getElementById('food-count').innerText = consumables.food;
+            document.getElementById('medkit-count').innerText = consumables.medkit;
+            document.getElementById('coffee-count').innerText = consumables.coffee;
+        }
+
+        function updateMissionStatus() {
+            const missionEl = document.getElementById('mission-status');
+            if (currentMission === 'survive') {
+                missionEl.innerText = `📍 Mission: Survive Night ${nightCounter}/99`;
+            } else if (currentMission === 'collect') {
+                missionEl.innerText = `📍 Mission: Collect Items (${missionProgress}/${missionTarget})`;
+            }
+        }
+
+        function updateWeatherStatus() {
+            const weatherEl = document.getElementById('weather-status');
+            if (currentWeather === 'rain') weatherEl.innerText = '🌧️ Weather: Heavy Rain';
+            else if (currentWeather === 'fog') weatherEl.innerText = '🌫️ Weather: Dense Fog';
+            else if (currentWeather === 'storm') weatherEl.innerText = '⛈️ Weather: Thunderstorm';
+            else weatherEl.innerText = '☀️ Weather: Clear';
         }
 
         function useRifle() {
@@ -970,6 +1179,12 @@
             nukePhase = 'ASCEND';
             explosionTimer = 0;
             nukeTimer = 0;
+            nukeDescentStarted = false;
+            nukeFearTimer = 0;
+            bobby.visible = true;
+            if(petty) petty.visible = true;
+            if(bobbyName3D) bobbyName3D.visible = true;
+            if(pettyName3D) pettyName3D.visible = true;
             nukeButton.style.display = 'none';
             nukePromptUI.style.display = 'none';
             document.getElementById('victory-message').innerText = 'The mushroom cloud swallowed Bobby whole. You win.';
@@ -1021,7 +1236,7 @@
                     const sequence = [65, 62, 58, 49];
                     let pitch = sequence[Math.floor(Math.random() * sequence.length)];
                     
-                    if(bobbyState === 'CHASE') {
+                    if(bobbyState === 'CHASE' || pettyState === 'CHASE' || micheloState === 'CHASE') {
                         osc.type = 'sawtooth';
                         pitch *= 1.75; 
                         gain.gain.setValueAtTime(0.95, audioCtx.currentTime);
@@ -1037,6 +1252,164 @@
                     osc.start(); osc.stop(audioCtx.currentTime + 0.75);
                 }, 500);
             } catch(e) { console.error("Audio block bypassed: ", e); }
+        }
+
+        function playFootstepSound() {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(150 + Math.random() * 50, audioCtx.currentTime);
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } catch(e) {}
+        }
+
+        function playDamageSound() {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            } catch(e) {}
+        }
+
+        function playAlertSound() {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            } catch(e) {}
+        }
+
+        function updateWeatherStatus() {
+            const weatherEl = document.getElementById('weather-status');
+            if (currentWeather === 'rain') weatherEl.innerText = '🌧️ Weather: Heavy Rain';
+            else if (currentWeather === 'fog') weatherEl.innerText = '🌫️ Weather: Dense Fog';
+            else if (currentWeather === 'storm') weatherEl.innerText = '⛈️ Weather: Thunderstorm';
+            else weatherEl.innerText = '☀️ Weather: Clear';
+        }
+
+        function processWeather(delta) {
+            weatherTimer += delta;
+            if (weatherTimer >= weatherDuration) {
+                weatherTimer = 0;
+                weatherDuration = 15 + Math.random() * 30;
+                currentWeather = WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)];
+                
+                if (currentWeather === 'fog') {
+                    scene.fog.far = 50;
+                } else if (currentWeather === 'rain' || currentWeather === 'storm') {
+                    hemiLight.intensity *= 0.7;
+                    if (currentWeather === 'storm') sanity -= delta * 2;
+                } else {
+                    scene.fog.far = 300;
+                    hemiLight.intensity = 0.4;
+                }
+            }
+        }
+
+        function processTrapCooldown(delta) {
+            if (!canPlaceTrap) {
+                trapCooldownTimer -= delta;
+                if (trapCooldownTimer <= 0) {
+                    canPlaceTrap = true;
+                }
+            }
+
+            // Check if traps catch enemies
+            for (let i = traps.length - 1; i >= 0; i--) {
+                const trap = traps[i];
+                if (!trap.active) {
+                    traps.splice(i, 1);
+                    continue;
+                }
+
+                // Check bobby
+                if (bobby && bobby.position.distanceTo(trap.pos) < 2 && trap.active) {
+                    bobbyStunnedUntil = Math.max(bobbyStunnedUntil, performance.now() / 1000 + STUN_DURATION);
+                    bobbyState = 'STUN';
+                    trap.active = false;
+                    alertUI.style.color = '#ffff00';
+                    alertUI.innerText = '🎯 Bobby caught in trap!';
+                    setTimeout(() => alertUI.innerText = '', 1500);
+                }
+
+                // Check petty
+                if (petty && petty.position.distanceTo(trap.pos) < 2 && trap.active) {
+                    pettyStunnedUntil = Math.max(pettyStunnedUntil, performance.now() / 1000 + STUN_DURATION);
+                    pettyState = 'STUN';
+                    trap.active = false;
+                    alertUI.style.color = '#ffff00';
+                    alertUI.innerText = '🎯 Petty caught in trap!';
+                    setTimeout(() => alertUI.innerText = '', 1500);
+                }
+
+                // Check michelo
+                if (michelo && michelo.position.distanceTo(trap.pos) < 2 && trap.active) {
+                    micheloStunnedUntil = Math.max(micheloStunnedUntil, performance.now() / 1000 + STUN_DURATION);
+                    micheloState = 'STUN';
+                    trap.active = false;
+                    alertUI.style.color = '#ffff00';
+                    alertUI.innerText = '🎯 Michelo caught in trap!';
+                    setTimeout(() => alertUI.innerText = '', 1500);
+                }
+            }
+        }
+
+        function processEvents(delta) {
+            eventTimer += delta;
+            
+            // Random events: supply drops
+            if (eventTimer > 45 && Math.random() < 0.3 && nightCounter % 5 === 0) {
+                eventTimer = 0;
+                // Supply drop: add random consumable
+                const type = ['food', 'medkit', 'coffee'][Math.floor(Math.random() * 3)];
+                consumables[type]++;
+                alertUI.style.color = '#00ff88';
+                alertUI.innerText = `📦 Supply drop! Found ${type === 'food' ? '🥫 food' : type === 'medkit' ? '💊 medkit' : '☕ coffee'}`;
+                setTimeout(() => alertUI.innerText = '', 3000);
+                updateConsumablesDisplay();
+            }
+
+            // Mission progression
+            if (currentMission === 'collect') {
+                missionProgress += delta * 0.5;
+                if (missionProgress >= missionTarget) {
+                    currentMission = 'survive';
+                    alertUI.style.color = '#ffff00';
+                    alertUI.innerText = '✅ Mission complete! Collection items gathered.';
+                    setTimeout(() => alertUI.innerText = '', 3000);
+                }
+            }
+        }
+
+        function updateWeatherStatus() {
+            const weatherEl = document.getElementById('weather-status');
+            if (currentWeather === 'rain') weatherEl.innerText = '🌧️ Weather: Heavy Rain';
+            else if (currentWeather === 'fog') weatherEl.innerText = '🌫️ Weather: Dense Fog';
+            else if (currentWeather === 'storm') weatherEl.innerText = '⛈️ Weather: Thunderstorm';
+            else weatherEl.innerText = '☀️ Weather: Clear';
         }
 
         function animateLoop() {
@@ -1061,9 +1434,15 @@
             processHunger(delta);
             processRifleCooldown(delta);
             processStunTimers(delta);
+            processWeather(delta);
+            processTrapCooldown(delta);
+            processEvents(delta);
             evaluateInteractions();
             processBobbyAI(delta);
             processPettyAI(delta);
+            processMicheloAI(delta);
+            updateMissionStatus();
+            updateWeatherStatus();
 
             renderer.render(scene, camera);
         }
@@ -1085,29 +1464,45 @@
                 pettyState = 'WANDER';
                 pettyTimer = 0;
             }
+            if (micheloState === 'STUN' && now >= micheloStunnedUntil) {
+                micheloState = 'WANDER';
+                micheloTimer = 0;
+            }
         }
 
         function processMovement(delta) {
+            // Handle sprinting and stamina
+            if (isSprinting && stamina > 0) {
+                stamina -= delta * STAMINA_DRAIN_RATE;
+                if (stamina < 0) stamina = 0;
+            } else {
+                isSprinting = false;
+                stamina += delta * STAMINA_REGEN_RATE;
+                if (stamina > 100) stamina = 100;
+            }
+            updateStaminaBar();
+
+            const speedMult = isSprinting ? SPRINT_SPEED_MULT : 1.0;
             velocity.x -= velocity.x * 10.0 * delta;
             velocity.z -= velocity.z * 10.0 * delta;
 
             if(!isMobile) {
-                inputDir.z = Number(keys.up) - Number(keys.down);
-                inputDir.x = Number(keys.right) - Number(keys.left);
+                inputDir.z = Number(keys.up || keys.w) - Number(keys.down || keys.s);
+                inputDir.x = Number(keys.right || keys.d) - Number(keys.left || keys.a);
                 inputDir.normalize();
 
                 const camEuler = new THREE.Euler(0, cameraRotation.y, 0, 'YXZ');
                 const forwardMove = new THREE.Vector3(inputDir.x, 0, -inputDir.z).applyEuler(camEuler);
                 
-                if (keys.up || keys.down) velocity.z -= forwardMove.z * 180.0 * delta;
-                if (keys.left || keys.right) velocity.x += forwardMove.x * 180.0 * delta;
+                if (keys.up || keys.down || keys.w || keys.s) velocity.z -= forwardMove.z * 180.0 * delta * speedMult;
+                if (keys.left || keys.right || keys.a || keys.d) velocity.x += forwardMove.x * 180.0 * delta * speedMult;
             } else {
                 const camEuler = new THREE.Euler(0, cameraRotation.y, 0, 'YXZ');
                 const arrowMoveX = Number(mobileDirection.right) - Number(mobileDirection.left);
                 const arrowMoveZ = Number(mobileDirection.down) - Number(mobileDirection.up);
                 const touchMove = new THREE.Vector3(mobileJoyX + arrowMoveX * 0.9, 0, mobileJoyY + arrowMoveZ * 0.9).applyEuler(camEuler);
-                velocity.x += touchMove.x * 24.0 * delta;
-                velocity.z += touchMove.z * 24.0 * delta;
+                velocity.x += touchMove.x * 24.0 * delta * speedMult;
+                velocity.z += touchMove.z * 24.0 * delta * speedMult;
             }
 
             camera.position.addScaledVector(velocity, delta);
@@ -1118,6 +1513,7 @@
             for(let zone of safeZones) {
                 if(Math.hypot(camera.position.x - zone.x, camera.position.z - zone.z) < 4.2) {
                     playerInSafeZone = true;
+                    currentSafeHouse = zone;
                     break;
                 }
             }
@@ -1195,13 +1591,14 @@
 
         function startDeathCutscene(attackerName) {
             if (isGameOver || isDeathCutscene) return;
+            playDamageSound();
             isDeathCutscene = true;
             deathCutsceneTimer = 0;
             deathAttacker = attackerName;
             if (!isMobile) document.exitPointerLock();
             document.getElementById('game-over').style.display = 'flex';
             document.getElementById('death-title').innerText = 'YOU WERE RIPPED APART';
-            document.getElementById('death-message').innerText = `${attackerName.toUpperCase()} tore through you in a savage burst of blood and bone. Restart and try again.`;
+            document.getElementById('death-message').innerText = `${attackerName.toUpperCase()} tore through you in a savage burst of blood and bone. Survived: ${nightCounter} nights. Restart and try again.`;
             flashOverlay.style.opacity = 0.95;
             flashOverlay.style.background = '#ff0000';
         }
@@ -1239,6 +1636,7 @@
                     if (rifleAggro || (!playerInSafeZone && distance < 65)) {
                         bobbyState = 'CHASE';
                         bobbyTimer = 0;
+                        bobbyChaseAlerted = false;
                     } else {
                         const wanderDir = new THREE.Vector3(Math.cos(timeOfDay), 0, Math.sin(timeOfDay)).normalize();
                         bobby.position.addScaledVector(wanderDir, 5.0 * delta);
@@ -1246,19 +1644,28 @@
                     break;
 
                 case 'CHASE':
+                    if (!bobbyChaseAlerted) {
+                        bobbyChaseAlerted = true;
+                        playAlertSound();
+                        alertUI.style.color = '#ff3333';
+                        alertUI.innerText = '⚠️ BOBBY IS COMING! ⚠️';
+                        setTimeout(() => alertUI.innerText = '', 2500);
+                    }
+
                     bobby.lookAt(playerPos);
                     const chaseDir = playerPos.clone().sub(bobby.position).normalize();
                     bobby.position.addScaledVector(chaseDir, rifleAggro ? 24.0 : 18.5 * delta);
 
                     if (rifleAggro) {
-                        bobbyState = 'CHASE';
-                        bobbyTimer = 0;
+                        bobbyTimer = 0;                        bobbyTimer =  0  
+                                            bobbyTimer = 0;
                     }
 
                     bobbyTimer += delta;
                     if(!rifleAggro && (playerInSafeZone || bobbyTimer >= BOBBY_CHASE_MAX)) {
                         bobbyState = 'COOLDOWN';
                         bobbyTimer = 0;
+                        bobbyChaseAlerted = false;
                         alertUI.style.color = "#00ffcc";
                         alertUI.innerText = "Bobby lost interest and stopped chasing!";
                         setTimeout(() => alertUI.innerText = "", 3000);
@@ -1304,6 +1711,7 @@
                     if(rifleAggro || (!playerInSafeZone && distance < 55)) {
                         pettyState = 'CHASE';
                         pettyTimer = 0;
+                        pettyChaseAlerted = false;
                     } else {
                         const wanderDir = new THREE.Vector3(Math.cos(timeOfDay*1.3), 0, Math.sin(timeOfDay*1.3)).normalize();
                         petty.position.addScaledVector(wanderDir, 4.0 * delta);
@@ -1311,6 +1719,14 @@
                     break;
 
                 case 'CHASE':
+                    if (!pettyChaseAlerted) {
+                        pettyChaseAlerted = true;
+                        playAlertSound();
+                        alertUI.style.color = '#ff1493';
+                        alertUI.innerText = '⚠️ PETTY IS COMING! ⚠️';
+                        setTimeout(() => alertUI.innerText = '', 2500);
+                    }
+
                     petty.lookAt(playerPos);
                     const chaseDir = playerPos.clone().sub(petty.position).normalize();
                     petty.position.addScaledVector(chaseDir, rifleAggro ? 18.0 : 14.0 * delta);
@@ -1324,6 +1740,7 @@
                     if(!rifleAggro && (playerInSafeZone || pettyTimer >= PETTY_CHASE_MAX)) {
                         pettyState = 'COOLDOWN';
                         pettyTimer = 0;
+                        pettyChaseAlerted = false;
                         alertUI.style.color = '#ffaaee';
                         alertUI.innerText = 'Petty lost interest for now...';
                         setTimeout(() => alertUI.innerText = '', 2500);
@@ -1350,6 +1767,81 @@
             }
         }
 
+        function processMicheloAI(delta) {
+            if(!michelo) return;
+            const playerPos = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+            if(micheloName3D) micheloName3D.lookAt(camera.position);
+
+            const distance = michelo.position.distanceTo(playerPos);
+            const rifleAggro = rifleOwned && !playerInSafeZone;
+
+            if (rifleAggro) {
+                micheloState = 'CHASE';
+                micheloTimer = 0;
+            }
+
+            switch(micheloState) {
+                case 'WANDER':
+                    michelo.lookAt(playerPos);
+                    if(rifleAggro || (!playerInSafeZone && distance < 60)) {
+                        micheloState = 'CHASE';
+                        micheloTimer = 0;
+                        micheloChaseAlerted = false;
+                    } else {
+                        const wanderDir = new THREE.Vector3(Math.cos(timeOfDay*0.9), 0, Math.sin(timeOfDay*0.9)).normalize();
+                        michelo.position.addScaledVector(wanderDir, 3.5 * delta);
+                    }
+                    break;
+
+                case 'CHASE':
+                    if (!micheloChaseAlerted) {
+                        micheloChaseAlerted = true;
+                        playAlertSound();
+                        alertUI.style.color = '#7744ff';
+                        alertUI.innerText = '⚠️ MICHELO IS COMING! ⚠️';
+                        setTimeout(() => alertUI.innerText = '', 2500);
+                    }
+
+                    michelo.lookAt(playerPos);
+                    const chaseDir = playerPos.clone().sub(michelo.position).normalize();
+                    michelo.position.addScaledVector(chaseDir, rifleAggro ? 16.0 : 12.5 * delta);
+
+                    if (rifleAggro) {
+                        micheloState = 'CHASE';
+                        micheloTimer = 0;
+                    }
+
+                    micheloTimer += delta;
+                    if(!rifleAggro && (playerInSafeZone || micheloTimer >= MICHELO_CHASE_MAX)) {
+                        micheloState = 'COOLDOWN';
+                        micheloTimer = 0;
+                        micheloChaseAlerted = false;
+                        alertUI.style.color = '#9999ff';
+                        alertUI.innerText = 'Michelo gave up the chase...';
+                        setTimeout(() => alertUI.innerText = '', 2500);
+                    }
+
+                    if(distance < 4.8 && !playerInSafeZone) {
+                        startDeathCutscene('Michelo');
+                    }
+                    break;
+
+                case 'COOLDOWN':
+                    const fleeDir3 = michelo.position.clone().sub(playerPos).normalize();
+                    michelo.position.addScaledVector(fleeDir3, 4.0 * delta);
+
+                    micheloTimer += delta;
+                    if(micheloTimer >= MICHELO_COOLDOWN_MAX) {
+                        micheloState = 'WANDER';
+                    }
+                    break;
+
+                case 'STUN':
+                    michelo.lookAt(playerPos);
+                    break;
+            }
+        }
+
         function createExplosionAt(position) {
             if (explosionGroup) {
                 scene.remove(explosionGroup);
@@ -1357,32 +1849,173 @@
             explosionGroup = new THREE.Group();
             explosionGroup.position.copy(position);
 
-            const core = new THREE.Mesh(
-                new THREE.SphereGeometry(1.1, 16, 16),
-                new THREE.MeshBasicMaterial({ color: 0xfff0a8, transparent: true, opacity: 0.95 })
+            // ===== BRIGHT CORE LAYERS =====
+            const brightCore = new THREE.Mesh(
+                new THREE.SphereGeometry(0.8, 20, 20),
+                new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.95 })
             );
-            explosionGroup.add(core);
+            explosionGroup.add(brightCore);
 
-            const ring = new THREE.Mesh(
-                new THREE.TorusGeometry(2.2, 0.2, 8, 24),
-                new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 })
+            const brightCore2 = new THREE.Mesh(
+                new THREE.SphereGeometry(1.2, 18, 18),
+                new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.75 })
             );
-            ring.rotation.x = Math.PI / 2.2;
-            explosionGroup.add(ring);
+            explosionGroup.add(brightCore2);
 
-            const mushroomStem = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.7, 1.1, 4.8, 16),
-                new THREE.MeshBasicMaterial({ color: 0xded7a0, transparent: true, opacity: 0.55 })
+            const orangeCore = new THREE.Mesh(
+                new THREE.SphereGeometry(1.6, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.65 })
             );
-            mushroomStem.position.y = 2.4;
-            explosionGroup.add(mushroomStem);
+            explosionGroup.add(orangeCore);
 
-            const mushroomCap = new THREE.Mesh(
-                new THREE.ConeGeometry(3.4, 5.4, 18),
-                new THREE.MeshBasicMaterial({ color: 0xcfd3a4, transparent: true, opacity: 0.45 })
+            const darkOrangeCore = new THREE.Mesh(
+                new THREE.SphereGeometry(2.0, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.55 })
             );
-            mushroomCap.position.y = 5.8;
-            explosionGroup.add(mushroomCap);
+            explosionGroup.add(darkOrangeCore);
+
+            // ===== INNER RINGS =====
+            const ring1 = new THREE.Mesh(
+                new THREE.TorusGeometry(1.8, 0.3, 10, 32),
+                new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.85 })
+            );
+            ring1.rotation.x = Math.PI / 2.2;
+            ring1.position.y = 0.3;
+            explosionGroup.add(ring1);
+
+            const ring2 = new THREE.Mesh(
+                new THREE.TorusGeometry(2.3, 0.25, 8, 28),
+                new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.75 })
+            );
+            ring2.rotation.x = Math.PI / 3;
+            ring2.position.y = -0.2;
+            explosionGroup.add(ring2);
+
+            const ring3 = new THREE.Mesh(
+                new THREE.TorusGeometry(2.8, 0.2, 8, 24),
+                new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.7 })
+            );
+            ring3.rotation.x = Math.PI / 1.8;
+            explosionGroup.add(ring3);
+
+            const ring4 = new THREE.Mesh(
+                new THREE.TorusGeometry(3.3, 0.22, 10, 20),
+                new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.62 })
+            );
+            ring4.rotation.z = Math.PI / 2.5;
+            ring4.position.y = 0.5;
+            explosionGroup.add(ring4);
+
+            // ===== EXPLOSION BURST SPIKES =====
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const spike = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.3, 1.8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.7 })
+                );
+                spike.position.set(Math.cos(angle) * 2.5, 0.5, Math.sin(angle) * 2.5);
+                spike.lookAt(0, 0, 0);
+                explosionGroup.add(spike);
+            }
+
+            // ===== MUSHROOM STEM =====
+            const stemInner = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.55, 0.95, 4.2, 18),
+                new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.6 })
+            );
+            stemInner.position.y = 2.1;
+            explosionGroup.add(stemInner);
+
+            const stemMid = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.65, 1.05, 4.4, 16),
+                new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.48 })
+            );
+            stemMid.position.y = 2.2;
+            explosionGroup.add(stemMid);
+
+            const stemOuter = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.75, 1.2, 4.6, 14),
+                new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.38 })
+            );
+            stemOuter.position.y = 2.3;
+            explosionGroup.add(stemOuter);
+
+            const stemDark = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.8, 1.3, 4.8, 12),
+                new THREE.MeshBasicMaterial({ color: 0x332200, transparent: true, opacity: 0.28 })
+            );
+            stemDark.position.y = 2.4;
+            explosionGroup.add(stemDark);
+
+            // ===== MUSHROOM CAP LAYERS =====
+            const capInner = new THREE.Mesh(
+                new THREE.ConeGeometry(2.8, 4.2, 20),
+                new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.5 })
+            );
+            capInner.position.y = 5.2;
+            explosionGroup.add(capInner);
+
+            const capMid = new THREE.Mesh(
+                new THREE.ConeGeometry(3.2, 4.8, 18),
+                new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.42 })
+            );
+            capMid.position.y = 5.5;
+            explosionGroup.add(capMid);
+
+            const capOuter = new THREE.Mesh(
+                new THREE.ConeGeometry(3.8, 5.4, 16),
+                new THREE.MeshBasicMaterial({ color: 0xff7700, transparent: true, opacity: 0.35 })
+            );
+            capOuter.position.y = 5.8;
+            explosionGroup.add(capOuter);
+
+            const capDark = new THREE.Mesh(
+                new THREE.ConeGeometry(4.2, 5.8, 14),
+                new THREE.MeshBasicMaterial({ color: 0x442200, transparent: true, opacity: 0.22 })
+            );
+            capDark.position.y = 6.1;
+            explosionGroup.add(capDark);
+
+            // ===== OUTER SMOKE RINGS =====
+            const smokeRing1 = new THREE.Mesh(
+                new THREE.TorusGeometry(4.5, 0.35, 6, 20),
+                new THREE.MeshBasicMaterial({ color: 0x663300, transparent: true, opacity: 0.4 })
+            );
+            smokeRing1.rotation.x = Math.PI / 2.8;
+            smokeRing1.position.y = 1.2;
+            explosionGroup.add(smokeRing1);
+
+            const smokeRing2 = new THREE.Mesh(
+                new THREE.TorusGeometry(5.2, 0.3, 6, 18),
+                new THREE.MeshBasicMaterial({ color: 0x552200, transparent: true, opacity: 0.32 })
+            );
+            smokeRing2.rotation.x = Math.PI / 3.5;
+            smokeRing2.position.y = 2.8;
+            explosionGroup.add(smokeRing2);
+
+            // ===== EXPLOSION BURSTS (Secondary) =====
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 + 0.5;
+                const burstColor = i % 2 === 0 ? 0xff9900 : 0xff4400;
+                const burst = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.25, 2.2, 6),
+                    new THREE.MeshBasicMaterial({ color: burstColor, transparent: true, opacity: 0.65 })
+                );
+                burst.position.set(Math.cos(angle) * 3.2, 1.2, Math.sin(angle) * 3.2);
+                burst.lookAt(0, 1.2, 0);
+                explosionGroup.add(burst);
+            }
+
+            // ===== BLACK SMOKE WISPS =====
+            for (let i = 0; i < 4; i++) {
+                const wispColor = [0x1a1a1a, 0x333333, 0x555555, 0x222222][i];
+                const wisp = new THREE.Mesh(
+                    new THREE.SphereGeometry(1.4 + i * 0.4, 12, 12),
+                    new THREE.MeshBasicMaterial({ color: wispColor, transparent: true, opacity: 0.15 + i * 0.08 })
+                );
+                wisp.position.y = 3.5 + i * 0.5;
+                explosionGroup.add(wisp);
+            }
 
             scene.add(explosionGroup);
         }
@@ -1411,8 +2044,52 @@
                 if (nukeMesh.position.y > 85) {
                     nukePhase = 'DESCEND';
                     nukeTimer = 0;
+                    nukeDescentStarted = false;
                 }
             } else if (nukeMesh && nukePhase === 'DESCEND') {
+                if (!nukeDescentStarted) {
+                    nukeDescentStarted = true;
+                    nukeFearTimer = 0;
+                    bobby.visible = true;
+                    if(petty) petty.visible = true;
+                    if(bobbyName3D) bobbyName3D.visible = true;
+                    if(pettyName3D) pettyName3D.visible = true;
+                }
+
+                // Animate Bobby and Petty panicking
+                nukeFearTimer += delta;
+                const fearIntensity = Math.min(1, nukeFearTimer * 2);
+
+                // Bobby panicking
+                if (bobby.visible) {
+                    bobby.position.x += (Math.random() - 0.5) * 0.4 * fearIntensity;
+                    bobby.position.z += (Math.random() - 0.5) * 0.4 * fearIntensity;
+                    bobby.rotation.x += (Math.random() - 0.5) * 0.08 * fearIntensity;
+                    bobby.rotation.z += (Math.random() - 0.5) * 0.08 * fearIntensity;
+                    
+                    // Find and rotate bobby's arms up in fear
+                    bobby.children.forEach((child, idx) => {
+                        if (idx === 2 || idx === 3) { // armL and armR
+                            child.rotation.z += (idx === 2 ? -0.06 : 0.06) * fearIntensity;
+                        }
+                    });
+                }
+
+                // Petty panicking
+                if (petty && petty.visible) {
+                    petty.position.x += (Math.random() - 0.5) * 0.35 * fearIntensity;
+                    petty.position.z += (Math.random() - 0.5) * 0.35 * fearIntensity;
+                    petty.rotation.x += (Math.random() - 0.5) * 0.07 * fearIntensity;
+                    petty.rotation.z += (Math.random() - 0.5) * 0.07 * fearIntensity;
+                    
+                    // Raise petty's arms in panic
+                    petty.children.forEach((child, idx) => {
+                        if (idx === 2 || idx === 3) { // armL and armR
+                            child.rotation.z += (idx === 2 ? -0.05 : 0.05) * fearIntensity;
+                        }
+                    });
+                }
+
                 const target = new THREE.Vector3(detonationPoint.x, 8.5, detonationPoint.z);
                 const direction = target.clone().sub(nukeMesh.position).normalize();
                 nukeMesh.position.addScaledVector(direction, delta * 115);
@@ -1444,7 +2121,11 @@
                     scene.remove(explosionGroup);
                     explosionGroup = null;
                     flashOverlay.style.opacity = 1;
+                    gamesWon++;
+                    const victoryMsg = document.getElementById('victory-message');
+                    victoryMsg.innerHTML = `The mushroom cloud swallowed Bobby whole. You win.<br><br>✅ Games Won: ${gamesWon}<br>📍 Nights Survived: ${nightCounter}/99`;
                     document.getElementById('victory').style.display = 'flex';
+                    playAlertSound();
                     isGameOver = true;
                 }
             }
