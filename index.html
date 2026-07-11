@@ -1004,7 +1004,7 @@
                     nukePromptUI.style.display = 'block';
                     if(!isMobile) document.exitPointerLock();
                     alertUI.style.color = "#ff1144";
-                    alertUI.innerText = "🚨 TACTICAL NUKE ACQUIRED! PRESS THE BUTTON! 🚨";
+                    alertUI.innerText = "🚨 TACTICAL NUKE ACQUIRED! PRESS THE BUTTON TO DESTROY THE MONSTERS! 🚨";
                 } else if (activeChest.userData.reward === 'rifle') {
                     rifleOwned = true;
                     inventory.rifle = true;
@@ -1140,7 +1140,7 @@
             }
             if (rifleCooldown > 0) {
                 alertUI.style.color = '#ffeb3b';
-                alertUI.innerText = 'Rifle is reloading.';
+                alertUI.innerText = 'Rifle is reloading...';
                 setTimeout(() => alertUI.innerText = '', 1800);
                 return;
             }
@@ -1187,7 +1187,7 @@
             if(pettyName3D) pettyName3D.visible = true;
             nukeButton.style.display = 'none';
             nukePromptUI.style.display = 'none';
-            document.getElementById('victory-message').innerText = 'The mushroom cloud swallowed Bobby whole. You win.';
+            document.getElementById('victory-message').innerText = 'The mushroom cloud swallowed Bobby whole and he had a terrible fate. But, You survived.';
 
             nukeMesh = new THREE.Group();
             const body = new THREE.Mesh(
