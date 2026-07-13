@@ -74,6 +74,228 @@
             box-shadow: 2px 2px 0px #000;
         }
 
+        #tutorial-btn {
+            margin-top: 10px;
+            border-color: #00ffcc;
+            background: #132822;
+        }
+
+        #tutorial-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle, #001512 0%, #000000 100%);
+            z-index: 35;
+            color: white;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .tutorial-card {
+            width: min(760px, 92vw);
+            min-height: 360px;
+            background: rgba(0, 0, 0, 0.72);
+            border: 3px solid #00ffcc;
+            box-shadow: 8px 8px 0px #000;
+            padding: 24px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        #tutorial-step-count {
+            color: #00ffcc;
+            font-weight: bold;
+            font-size: 0.95rem;
+            letter-spacing: 1px;
+        }
+
+        #tutorial-step-title {
+            color: #ffeb3b;
+            margin: 0;
+            font-size: 1.9rem;
+            text-shadow: 2px 2px 0px #000;
+        }
+
+        #tutorial-step-body {
+            margin: 0;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: #e7fef8;
+            white-space: pre-line;
+        }
+
+        .tutorial-nuke-scene {
+            width: 100%;
+            height: 128px;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.22);
+            border-radius: 10px;
+            background: linear-gradient(180deg, rgba(8, 28, 36, 0.9) 0%, rgba(0, 0, 0, 0.95) 100%);
+            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.65);
+        }
+
+        .tutorial-ground-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 14px;
+            height: 3px;
+            background: rgba(0, 255, 204, 0.45);
+        }
+
+        .tutorial-nuke {
+            position: absolute;
+            left: -44px;
+            bottom: 28px;
+            width: 44px;
+            height: 14px;
+            border-radius: 8px;
+            background: linear-gradient(90deg, #444 0%, #888 60%, #ff3300 100%);
+            box-shadow: 0 0 10px rgba(255, 60, 0, 0.45);
+            animation: tutorialNukeFlight 5.2s linear infinite;
+        }
+
+        .tutorial-nuke::before {
+            content: '';
+            position: absolute;
+            left: -9px;
+            top: 2px;
+            width: 8px;
+            height: 10px;
+            background: #2b2b2b;
+            border-radius: 2px;
+        }
+
+        .tutorial-nuke::after {
+            content: '';
+            position: absolute;
+            right: -7px;
+            top: 3px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid #ff3300;
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+        }
+
+        .tutorial-shockwave {
+            position: absolute;
+            left: 70%;
+            bottom: 19px;
+            width: 14px;
+            height: 14px;
+            border: 3px solid rgba(255, 210, 70, 0.8);
+            border-radius: 50%;
+            opacity: 0;
+            transform: translate(-50%, 50%) scale(0.1);
+            animation: tutorialShockwave 5.2s linear infinite;
+        }
+
+        .tutorial-mushroom {
+            position: absolute;
+            left: 70%;
+            bottom: 14px;
+            width: 0;
+            height: 0;
+            transform: translateX(-50%) scale(0.1);
+            opacity: 0;
+            animation: tutorialMushroomRise 5.2s linear infinite;
+        }
+
+        .tutorial-mushroom-core {
+            position: absolute;
+            left: 0;
+            bottom: 24px;
+            width: 18px;
+            height: 58px;
+            transform: translateX(-50%);
+            border-radius: 10px;
+            background: linear-gradient(180deg, #ffd955 0%, #ff8c00 75%, #6b2f00 100%);
+            box-shadow: 0 0 12px rgba(255, 165, 0, 0.35);
+        }
+
+        .tutorial-mushroom-cap {
+            position: absolute;
+            left: 0;
+            bottom: 70px;
+            width: 86px;
+            height: 38px;
+            transform: translateX(-50%);
+            border-radius: 60px 60px 18px 18px;
+            background: radial-gradient(circle at 50% 30%, #fff2ae 0%, #ffb347 42%, #ff7000 78%, #5a2300 100%);
+            box-shadow: 0 0 20px rgba(255, 136, 0, 0.45);
+        }
+
+        .tutorial-flash {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 0%, rgba(255, 220, 120, 0.2) 42%, rgba(255, 255, 255, 0) 70%);
+            opacity: 0;
+            animation: tutorialFlash 5.2s linear infinite;
+        }
+
+        @keyframes tutorialNukeFlight {
+            0% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0; }
+            8% { opacity: 1; }
+            54% { transform: translateX(350px) translateY(-8px) rotate(-4deg); opacity: 1; }
+            57% { opacity: 0; }
+            100% { transform: translateX(350px) translateY(-8px) rotate(-4deg); opacity: 0; }
+        }
+
+        @keyframes tutorialShockwave {
+            0%, 54% { opacity: 0; transform: translate(-50%, 50%) scale(0.1); }
+            58% { opacity: 0.9; }
+            68% { opacity: 0.45; transform: translate(-50%, 50%) scale(3.4); }
+            80%, 100% { opacity: 0; transform: translate(-50%, 50%) scale(4.8); }
+        }
+
+        @keyframes tutorialMushroomRise {
+            0%, 56% { opacity: 0; transform: translateX(-50%) scale(0.12); }
+            60% { opacity: 1; transform: translateX(-50%) scale(0.45); }
+            70% { opacity: 1; transform: translateX(-50%) scale(0.9); }
+            82% { opacity: 0.78; transform: translateX(-50%) scale(1.08); }
+            100% { opacity: 0; transform: translateX(-50%) scale(1.22); }
+        }
+
+        @keyframes tutorialFlash {
+            0%, 56% { opacity: 0; }
+            60% { opacity: 0.85; }
+            70% { opacity: 0.28; }
+            100% { opacity: 0; }
+        }
+
+        .tutorial-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 700px) {
+            #tutorial-step-title {
+                font-size: 1.45rem;
+            }
+
+            #tutorial-step-body {
+                font-size: 1rem;
+            }
+
+            .tutorial-card {
+                min-height: 390px;
+                padding: 18px;
+            }
+        }
+
         /* UI elements */
         #ui {
             position: absolute;
@@ -320,6 +542,32 @@
             <button class="menu-btn" onclick="selectDevice('desktop')">💻 DESKTOP (Arrows)</button>
             <button class="menu-btn" onclick="selectDevice('mobile')">📱 MOBILE (Touch Joysticks or Up Down buttons)</button>
         </div>
+        <button id="tutorial-btn" class="menu-btn" onclick="openTutorial()">📘 TUTORIAL</button>
+    </div>
+
+    <div id="tutorial-overlay">
+        <div class="tutorial-card">
+            <div>
+                <div id="tutorial-step-count">STEP 1 / 7</div>
+                <h2 id="tutorial-step-title">Welcome to 99 Nights</h2>
+                <div class="tutorial-nuke-scene" aria-hidden="true">
+                    <div class="tutorial-ground-line"></div>
+                    <div class="tutorial-nuke"></div>
+                    <div class="tutorial-shockwave"></div>
+                    <div class="tutorial-mushroom">
+                        <div class="tutorial-mushroom-core"></div>
+                        <div class="tutorial-mushroom-cap"></div>
+                    </div>
+                    <div class="tutorial-flash"></div>
+                </div>
+                <p id="tutorial-step-body"></p>
+            </div>
+            <div class="tutorial-controls">
+                <button class="menu-btn" id="tutorial-prev" onclick="prevTutorialStep()">◀ PREV</button>
+                <button class="menu-btn" id="tutorial-next" onclick="nextTutorialStep()">NEXT ▶</button>
+                <button class="menu-btn" onclick="closeTutorial()">CLOSE</button>
+            </div>
+        </div>
     </div>
 
     <div id="crosshair">+</div>
@@ -555,6 +803,78 @@
         const flashOverlay = document.getElementById('flash-overlay');
         const nukePromptUI = document.getElementById('nuke-prompt');
         const nukeButton = document.getElementById('nuke-trigger');
+        const tutorialOverlay = document.getElementById('tutorial-overlay');
+        const tutorialStepCount = document.getElementById('tutorial-step-count');
+        const tutorialStepTitle = document.getElementById('tutorial-step-title');
+        const tutorialStepBody = document.getElementById('tutorial-step-body');
+        const tutorialPrevBtn = document.getElementById('tutorial-prev');
+        const tutorialNextBtn = document.getElementById('tutorial-next');
+        let tutorialIndex = 0;
+
+        const tutorialSteps = [
+            {
+                title: 'Welcome to 99 Nights',
+                body: 'You must survive in the forest, avoid monsters, and search chests until you find the tactical nuke.\n\nYour final goal: launch the nuke before the monsters rip you apart.'
+            },
+            {
+                title: 'Movement and Camera',
+                body: 'Desktop:\n- Move with Arrow Keys or WASD\n- Look around with mouse (click game to lock cursor)\n\nMobile:\n- Left joystick and arrow buttons move you\n- Right side of screen controls your look direction'
+            },
+            {
+                title: 'Open Chests',
+                body: 'Look at a chest until the interaction prompt appears.\n\nDesktop: press E\nMobile: tap USE\n\nChests can contain medkits, rifle, empty loot, or the nuke.'
+            },
+            {
+                title: 'Safe Houses and Sanity',
+                body: 'Purple glowing cabins are safe zones. While inside, monsters lose chase and your sanity recovers faster.\n\nIf sanity reaches 0, you lose.'
+            },
+            {
+                title: 'Combat and Tools',
+                body: 'Rifle:\n- Get it from chests (disabled on Hard)\n- Press Q to cycle items, F to draw/fire\n\nMedkit:\n- Press 2 to heal sanity\n\nTrap:\n- Press T to place trap (limited count and cooldown)'
+            },
+            {
+                title: 'Weather and Danger',
+                body: 'Weather changes over time. Storms drain sanity faster and can call deadly lightning strikes.\n\nKeep moving, use safe zones, and avoid open areas during thunder.'
+            },
+            {
+                title: 'Winning the Run',
+                body: 'When you find the nuke chest, a big launch button appears. Trigger it quickly.\n\nGood luck surviving all the nights in the forest.'
+            }
+        ];
+
+        function renderTutorialStep() {
+            const step = tutorialSteps[tutorialIndex];
+            tutorialStepCount.innerText = `STEP ${tutorialIndex + 1} / ${tutorialSteps.length}`;
+            tutorialStepTitle.innerText = step.title;
+            tutorialStepBody.innerText = step.body;
+            tutorialPrevBtn.style.visibility = tutorialIndex === 0 ? 'hidden' : 'visible';
+            tutorialNextBtn.innerText = tutorialIndex === tutorialSteps.length - 1 ? 'FINISH' : 'NEXT ▶';
+        }
+
+        function openTutorial() {
+            tutorialIndex = 0;
+            tutorialOverlay.style.display = 'flex';
+            renderTutorialStep();
+        }
+
+        function closeTutorial() {
+            tutorialOverlay.style.display = 'none';
+        }
+
+        function nextTutorialStep() {
+            if (tutorialIndex >= tutorialSteps.length - 1) {
+                closeTutorial();
+                return;
+            }
+            tutorialIndex++;
+            renderTutorialStep();
+        }
+
+        function prevTutorialStep() {
+            if (tutorialIndex <= 0) return;
+            tutorialIndex--;
+            renderTutorialStep();
+        }
 
         function setDifficulty(level) {
             if (!DIFFICULTY_PRESETS[level]) return;
