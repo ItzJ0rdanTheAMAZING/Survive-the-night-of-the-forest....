@@ -404,10 +404,14 @@
         let hotbarItemDrawn = false;
         const RIFLE_COOLDOWN_MAX = 2.5;
         const STUN_DURATION = 10.0;
+        const MONSTER_FEAR_RADIUS = 30;
+        const MONSTER_FEAR_DRAIN_MAX = 3.2;
+        const CHASE_FEAR_BONUS = 1.4;
         let selectedDifficulty = 'medium';
         let difficultyModifiers = {
             enemySpeedMult: 1,
             enemyDetectionMult: 1,
+            safeHouseCount: 4,
             morningSanityRegenMult: 1,
             safeZoneSanityRegenMult: 1,
             stormSanityDrainMult: 1,
@@ -418,6 +422,7 @@
             easy: {
                 enemySpeedMult: 0.82,
                 enemyDetectionMult: 0.86,
+                safeHouseCount: 6,
                 morningSanityRegenMult: 1.2,
                 safeZoneSanityRegenMult: 1.22,
                 stormSanityDrainMult: 0.75,
@@ -427,6 +432,7 @@
             medium: {
                 enemySpeedMult: 1,
                 enemyDetectionMult: 1,
+                safeHouseCount: 4,
                 morningSanityRegenMult: 1,
                 safeZoneSanityRegenMult: 1,
                 stormSanityDrainMult: 1,
@@ -436,6 +442,7 @@
             hard: {
                 enemySpeedMult: 1.2,
                 enemyDetectionMult: 1.18,
+                safeHouseCount: 0,
                 morningSanityRegenMult: 0.82,
                 safeZoneSanityRegenMult: 0.84,
                 stormSanityDrainMult: 1.35,
@@ -558,6 +565,10 @@
             return RIFLE_COOLDOWN_MAX * difficultyModifiers.rifleCooldownMult;
         }
 
+        function isRifleEnabled() {
+            return selectedDifficulty !== 'hard';
+        }
+
         function selectDevice(deviceType) {
             document.getElementById('setup-menu').style.display = 'none';
             if(deviceType === 'mobile') {
@@ -570,6 +581,11 @@
         }
 
         function initGame() {
+            rifleOwned = false;
+            inventory.rifle = false;
+            selectedHotbarItem = null;
+            hotbarItemDrawn = false;
+
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x05100d);
             scene.fog = new THREE.FogExp2(0x05100d, 0.04);
@@ -617,6 +633,7 @@
 
             bindNukeButton();
             startBuiltInMusic();
+            updateRifleStatus();
             updateConsumablesDisplay();
             updateMissionStatus();
             updateWeatherStatus();
@@ -672,12 +689,13 @@
         function spawnChests() {
             const count = 60;
             const medkitIndex = 35;
+            const rifleAllowed = isRifleEnabled();
             let nukeIndex = Math.floor(Math.random() * count);
             while (nukeIndex === medkitIndex) {
                 nukeIndex = Math.floor(Math.random() * count);
             }
             const rifleIndexes = new Set();
-            while (rifleIndexes.size < 8) {
+            while (rifleAllowed && rifleIndexes.size < 8) {
                 const candidate = Math.floor(Math.random() * count);
                 if (candidate !== nukeIndex && candidate !== medkitIndex) rifleIndexes.add(candidate);
             }
@@ -704,7 +722,7 @@
                 let reward = 'empty';
                 if (i === medkitIndex) reward = 'medkit';
                 else if (i === nukeIndex) reward = 'nuke';
-                else if (rifleIndexes.has(i)) reward = 'rifle';
+                else if (rifleAllowed && rifleIndexes.has(i)) reward = 'rifle';
                 chest.userData = { reward, opened: false };
                 
                 scene.add(chest);
@@ -713,9 +731,18 @@
         }
 
         function buildSafeHouses() {
-            const positions = [ {x: 60, z: 60}, {x: -60, z: -60}, {x: 80, z: -80}, {x: -80, z: 80} ];
+            const positions = [
+                {x: 60, z: 60},
+                {x: -60, z: -60},
+                {x: 80, z: -80},
+                {x: -80, z: 80},
+                {x: 120, z: 0},
+                {x: -120, z: 0}
+            ];
+            const count = Math.max(0, Math.min(positions.length, difficultyModifiers.safeHouseCount || 0));
+            const selectedPositions = positions.slice(0, count);
             
-            positions.forEach((pos) => {
+            selectedPositions.forEach((pos) => {
                 const house = new THREE.Group();
                 const frameMat = new THREE.MeshStandardMaterial({ color: 0xff00ff, emissive: 0xff00ff, emissiveIntensity: 0.5 });
                 const baseGeo = new THREE.BoxGeometry(8, 0.1, 8);
@@ -1002,23 +1029,27 @@
             }
 
             if (!selectedHotbarItem) {
-                alertUI.style.color = '#ffeb3b';
-                alertUI.innerText = 'No item is selected in your hotbar.';
-                setTimeout(() => alertUI.innerText = '', 2200);
-                return;
+                if (inventory.rifle) {
+                    selectedHotbarItem = 'rifle';
+                } else {
+                    alertUI.style.color = '#ffeb3b';
+                    alertUI.innerText = 'No item is selected in your hotbar.';
+                    setTimeout(() => alertUI.innerText = '', 2200);
+                    return;
+                }
             }
 
-            if (!hotbarItemDrawn) {
+            if (selectedHotbarItem === 'rifle' && !hotbarItemDrawn) {
                 hotbarItemDrawn = true;
                 updateHotbarUI();
-                alertUI.style.color = '#ffffff';
-                alertUI.innerText = 'Rifle pulled out.';
-                setTimeout(() => alertUI.innerText = '', 1800);
-                return;
             }
 
             if (selectedHotbarItem === 'rifle') {
                 useRifle();
+            } else {
+                alertUI.style.color = '#ffeb3b';
+                alertUI.innerText = 'No usable item selected.';
+                setTimeout(() => alertUI.innerText = '', 2200);
             }
         }
 
@@ -1062,6 +1093,10 @@
         }
 
         function updateRifleStatus() {
+            if (!isRifleEnabled()) {
+                rifleStatusUI.innerText = 'Rifle: Disabled on Hard';
+                return;
+            }
             if (!rifleOwned) {
                 rifleStatusUI.innerText = 'Rifle: Not Found';
                 return;
@@ -1119,19 +1154,21 @@
         }
 
         function useRifle() {
+            if (!isRifleEnabled()) {
+                alertUI.style.color = '#ff5555';
+                alertUI.innerText = 'Rifle is disabled on Hard difficulty.';
+                setTimeout(() => alertUI.innerText = '', 2200);
+                return;
+            }
             if (!rifleOwned || !inventory.rifle || selectedHotbarItem !== 'rifle') {
                 alertUI.style.color = '#ffeb3b';
-                alertUI.innerText = 'Pull the rifle from your hotbar before firing.';
+                alertUI.innerText = 'Rifle is not available.';
                 setTimeout(() => alertUI.innerText = '', 2200);
                 return;
             }
             if (!hotbarItemDrawn) {
                 hotbarItemDrawn = true;
                 updateHotbarUI();
-                alertUI.style.color = '#ffffff';
-                alertUI.innerText = 'Rifle pulled out.';
-                setTimeout(() => alertUI.innerText = '', 1800);
-                return;
             }
             if (rifleCooldown > 0) {
                 alertUI.style.color = '#ffeb3b';
@@ -1437,10 +1474,37 @@
             processBobbyAI(delta);
             processPettyAI(delta);
             processMicheloAI(delta);
+            processMonsterSanityDrain(delta);
             updateMissionStatus();
             updateWeatherStatus();
 
             renderer.render(scene, camera);
+        }
+
+        function getMonsterFearDrain(monster, state, playerPos, delta) {
+            if (!monster || state === 'STUN') return 0;
+
+            const distance = monster.position.distanceTo(playerPos);
+            if (distance >= MONSTER_FEAR_RADIUS) return 0;
+
+            const proximityFactor = 1 - (distance / MONSTER_FEAR_RADIUS);
+            const stateMultiplier = state === 'CHASE' ? CHASE_FEAR_BONUS : 1.0;
+            return MONSTER_FEAR_DRAIN_MAX * proximityFactor * stateMultiplier * difficultyModifiers.enemySpeedMult * delta;
+        }
+
+        function processMonsterSanityDrain(delta) {
+            if (isGameOver || isDeathCutscene || isNuking) return;
+
+            const playerPos = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+            let totalDrain = 0;
+
+            totalDrain += getMonsterFearDrain(bobby, bobbyState, playerPos, delta);
+            totalDrain += getMonsterFearDrain(petty, pettyState, playerPos, delta);
+            totalDrain += getMonsterFearDrain(michelo, micheloState, playerPos, delta);
+
+            if (totalDrain > 0) {
+                sanity -= totalDrain;
+            }
         }
 
         function processRifleCooldown(delta) {
