@@ -307,7 +307,6 @@
         <div id="action-button">USE</div>
         <div id="hotbar">
             <div class="hotbar-slot" id="slot-rifle">RIFLE</div>
-            <div class="hotbar-slot" id="slot-food">FOOD</div>
         </div>
         <div id="mobile-arrows">
             <button class="mobile-arrow-btn" data-dir="up">▲</button>
@@ -330,15 +329,10 @@
         <div class="bar-container">
             <div id="sanity-bar"></div>
         </div>
-        <div style="margin-top: 10px;">Hunger:</div>
-        <div class="bar-container">
-            <div id="hunger-bar" style="background: #8b5a2b; width: 100%;"></div>
-        </div>
         <div id="rifle-status" style="margin-top: 12px; color: #7cff83; font-weight: bold;">Rifle: Not Found</div>
         <div id="mission-status" style="margin-top: 12px; color: #ffeb3b; font-weight: bold;"></div>
         <div id="weather-status" style="margin-top: 12px; color: #aabbff; font-weight: bold;"></div>
         <div id="consumables-display" style="margin-top: 12px; color: #00ff88; font-weight: bold; font-size: 0.85rem;">
-            <div>🥫 Food: <span id="food-count">0</span></div>
             <div>💊 Medkit: <span id="medkit-count">0</span></div>
         </div>
         <div id="chest-alert" style="margin-top: 15px; color: #ffeb3b; font-weight: bold;"></div>
@@ -361,7 +355,7 @@
         let prevTime = performance.now();
 
         // --- Gameplay States ---
-        let sanity = 100, hunger = 100, nightCounter = 1, timeOfDay = 0;
+        let sanity = 100, nightCounter = 1, timeOfDay = 0;
         let isGameOver = false, isNuking = false, nukeTimer = 0;
         let playerInSafeZone = false;
         let nukeLaunchTriggered = false;
@@ -376,12 +370,11 @@
         let mobileDirection = { up: false, down: false, left: false, right: false };
         let rifleOwned = false;
         let rifleCooldown = 0;
-        let inventory = { rifle: false, food: false };
+        let inventory = { rifle: false };
         let selectedHotbarItem = null;
         let hotbarItemDrawn = false;
         const RIFLE_COOLDOWN_MAX = 2.5;
         const STUN_DURATION = 10.0;
-        const HUNGER_DRAIN_RATE = 2.4;
         let bobbyStunnedUntil = 0;
         let pettyStunnedUntil = 0;
         let bobbyChaseAlerted = false;
@@ -392,8 +385,7 @@
         // --- NEW SYSTEMS: Consumables, Traps, Weather, Missions ---
         
         // Consumables inventory
-        let consumables = { food: 0, medkit: 0 };
-        const FOOD_HEAL_HUNGER = 40;
+        let consumables = { medkit: 0 };
         const MEDKIT_HEAL_SANITY = 50;
         
         // Traps system
@@ -469,10 +461,8 @@
         const promptUI = document.getElementById('interaction-prompt');
         const alertUI = document.getElementById('chest-alert');
         const rifleStatusUI = document.getElementById('rifle-status');
-        const hungerBarUI = document.getElementById('hunger-bar');
         const hotbarSlots = {
-            rifle: document.getElementById('slot-rifle'),
-            food: document.getElementById('slot-food')
+            rifle: document.getElementById('slot-rifle')
         };
         const flashOverlay = document.getElementById('flash-overlay');
         const nukePromptUI = document.getElementById('nuke-prompt');
@@ -537,8 +527,6 @@
 
             bindNukeButton();
             startBuiltInMusic();
-            hunger = 100;
-            updateHungerStatus();
             updateConsumablesDisplay();
             updateMissionStatus();
             updateWeatherStatus();
@@ -593,16 +581,15 @@
 
         function spawnChests() {
             const count = 60;
-            const foodIndex = 19;
             const medkitIndex = 35;
             let nukeIndex = Math.floor(Math.random() * count);
-            while (nukeIndex === foodIndex || nukeIndex === medkitIndex) {
+            while (nukeIndex === medkitIndex) {
                 nukeIndex = Math.floor(Math.random() * count);
             }
             const rifleIndexes = new Set();
             while (rifleIndexes.size < 8) {
                 const candidate = Math.floor(Math.random() * count);
-                if (candidate !== nukeIndex && candidate !== foodIndex && candidate !== medkitIndex) rifleIndexes.add(candidate);
+                if (candidate !== nukeIndex && candidate !== medkitIndex) rifleIndexes.add(candidate);
             }
             const boxGeo = new THREE.BoxGeometry(1.3, 0.8, 0.8);
             const boxMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.4 }); 
@@ -625,8 +612,7 @@
                 chest.position.set(cx, 0, cz);
                 chest.rotation.y = Math.random() * Math.PI * 2;
                 let reward = 'empty';
-                if (i === foodIndex) reward = 'food';
-                else if (i === medkitIndex) reward = 'medkit';
+                if (i === medkitIndex) reward = 'medkit';
                 else if (i === nukeIndex) reward = 'nuke';
                 else if (rifleIndexes.has(i)) reward = 'rifle';
                 chest.userData = { reward, opened: false };
@@ -783,7 +769,6 @@
                 case 'KeyF': if(isPressed) handleHotbarAction(); break;
                 case 'KeyQ': if(isPressed) cycleHotbarItem(); break;
 
-                case 'Digit1': if(isPressed) consumeItem('food'); break;
                 case 'Digit2': if(isPressed) consumeItem('medkit'); break;
                 case 'KeyT': if(isPressed) placeTrap(); break;
             }
@@ -901,13 +886,11 @@
             if (hotbarItemDrawn) activeSlot.classList.add('drawn');
 
             hotbarSlots.rifle.style.opacity = inventory.rifle ? '1' : '0.35';
-            hotbarSlots.food.style.opacity = inventory.food ? '1' : '0.35';
         }
 
         function cycleHotbarItem() {
             const available = [];
             if (inventory.rifle) available.push('rifle');
-            if (inventory.food) available.push('food');
             if (!available.length) {
                 selectedHotbarItem = null;
                 hotbarItemDrawn = false;
@@ -938,38 +921,15 @@
             if (!hotbarItemDrawn) {
                 hotbarItemDrawn = true;
                 updateHotbarUI();
-                const label = selectedHotbarItem === 'rifle' ? 'Rifle pulled out.' : 'Food pulled out.';
                 alertUI.style.color = '#ffffff';
-                alertUI.innerText = label;
+                alertUI.innerText = 'Rifle pulled out.';
                 setTimeout(() => alertUI.innerText = '', 1800);
                 return;
             }
 
             if (selectedHotbarItem === 'rifle') {
                 useRifle();
-            } else if (selectedHotbarItem === 'food') {
-                consumeFood();
             }
-        }
-
-        function consumeFood() {
-            if (!inventory.food) {
-                alertUI.style.color = '#ffeb3b';
-                alertUI.innerText = 'You do not have food in your hotbar.';
-                setTimeout(() => alertUI.innerText = '', 2200);
-                return;
-            }
-
-            hunger = Math.min(100, hunger + 35);
-            inventory.food = false;
-            hotbarItemDrawn = false;
-            if (selectedHotbarItem === 'food') {
-                selectedHotbarItem = inventory.rifle ? 'rifle' : null;
-            }
-            updateHotbarUI();
-            alertUI.style.color = '#ffb347';
-            alertUI.innerText = 'You ate the food.';
-            setTimeout(() => alertUI.innerText = '', 2200);
         }
 
         function interactAction() {
@@ -998,12 +958,6 @@
                     alertUI.style.color = "#7cff83";
                     alertUI.innerText = "🔫 Rifle acquired! Pull it from your hotbar to fire it.";
                     setTimeout(() => alertUI.innerText = "", 3500);
-                } else if (activeChest.userData.reward === 'food') {
-                    consumables.food += 2;
-                    updateConsumablesDisplay();
-                    alertUI.style.color = "#ffb347";
-                    alertUI.innerText = "🥫 Found food x2! Press 1 to eat (or check hotbar).";
-                    setTimeout(() => alertUI.innerText = "", 3000);
                 } else if (activeChest.userData.reward === 'medkit') {
                     consumables.medkit += 1;
                     updateConsumablesDisplay();
@@ -1029,22 +983,8 @@
             }
         }
 
-        function updateHungerStatus() {
-            hunger = Math.max(0, Math.min(100, hunger));
-            hungerBarUI.style.width = hunger + '%';
-        }
-
-
-
         function consumeItem(type) {
-            if (type === 'food' && consumables.food > 0) {
-                consumables.food--;
-                hunger = Math.min(100, hunger + FOOD_HEAL_HUNGER);
-                updateHungerStatus();
-                alertUI.style.color = '#00ff88';
-                alertUI.innerText = '🥫 Ate food! Hunger restored.';
-                setTimeout(() => alertUI.innerText = '', 2000);
-            } else if (type === 'medkit' && consumables.medkit > 0) {
+            if (type === 'medkit' && consumables.medkit > 0) {
                 consumables.medkit--;
                 sanity = Math.min(100, sanity + MEDKIT_HEAL_SANITY);
                 alertUI.style.color = '#ff00ff';
@@ -1068,7 +1008,6 @@
         }
 
         function updateConsumablesDisplay() {
-            document.getElementById('food-count').innerText = consumables.food;
             document.getElementById('medkit-count').innerText = consumables.medkit;
         }
 
@@ -1349,11 +1288,10 @@
             // Random events: supply drops
             if (eventTimer > 45 && Math.random() < 0.3 && nightCounter % 5 === 0) {
                 eventTimer = 0;
-                // Supply drop: add random consumable
-                const type = ['food', 'medkit'][Math.floor(Math.random() * 2)];
-                consumables[type]++;
+                // Supply drop: add medkit
+                consumables.medkit++;
                 alertUI.style.color = '#00ff88';
-                alertUI.innerText = `📦 Supply drop! Found ${type === 'food' ? '🥫 food' : '💊 medkit'}`;
+                alertUI.innerText = '📦 Supply drop! Found 💊 medkit';
                 setTimeout(() => alertUI.innerText = '', 3000);
                 updateConsumablesDisplay();
             }
@@ -1397,7 +1335,6 @@
 
             processMovement(delta);
             processEnvironmentCycle(delta);
-            processHunger(delta);
             processRifleCooldown(delta);
             processStunTimers(delta);
             processWeather(delta);
@@ -1499,24 +1436,6 @@
                 if(!isMobile) document.exitPointerLock();
                 document.getElementById('game-over').style.display = 'flex';
             }
-        }
-
-        function processHunger(delta) {
-            hunger -= delta * HUNGER_DRAIN_RATE;
-            updateHungerStatus();
-
-            if (hunger <= 0) {
-                triggerHungerDeath();
-            }
-        }
-
-        function triggerHungerDeath() {
-            if (isGameOver || isDeathCutscene || isNuking) return;
-            isGameOver = true;
-            if (!isMobile) document.exitPointerLock();
-            document.getElementById('game-over').style.display = 'flex';
-            document.getElementById('death-title').innerText = 'YOU STARVED TO DEATH';
-            document.getElementById('death-message').innerText = 'Your hunger dropped to zero. You collapsed in the dark. Restart and try again.';
         }
 
         function evaluateInteractions() {
