@@ -334,17 +334,12 @@
         <div class="bar-container">
             <div id="hunger-bar" style="background: #8b5a2b;"></div>
         </div>
-        <div style="margin-top: 10px;">Stamina:</div>
-        <div class="bar-container">
-            <div id="stamina-bar" style="background: #00ccff;"></div>
-        </div>
         <div id="rifle-status" style="margin-top: 12px; color: #7cff83; font-weight: bold;">Rifle: Not Found</div>
         <div id="mission-status" style="margin-top: 12px; color: #ffeb3b; font-weight: bold;"></div>
         <div id="weather-status" style="margin-top: 12px; color: #aabbff; font-weight: bold;"></div>
         <div id="consumables-display" style="margin-top: 12px; color: #00ff88; font-weight: bold; font-size: 0.85rem;">
             <div>🥫 Food: <span id="food-count">0</span></div>
             <div>💊 Medkit: <span id="medkit-count">0</span></div>
-            <div>☕ Coffee: <span id="coffee-count">0</span></div>
         </div>
         <div id="chest-alert" style="margin-top: 15px; color: #ffeb3b; font-weight: bold;"></div>
     </div>
@@ -394,18 +389,12 @@
         let nukeDescentStarted = false;
         let nukeFearTimer = 0;
 
-        // --- NEW SYSTEMS: Stamina, Consumables, Traps, Weather, Missions ---
-        let stamina = 100;
-        let isSprinting = false;
-        const SPRINT_SPEED_MULT = 1.8;
-        const STAMINA_DRAIN_RATE = 35;
-        const STAMINA_REGEN_RATE = 20;
+        // --- NEW SYSTEMS: Consumables, Traps, Weather, Missions ---
         
         // Consumables inventory
-        let consumables = { food: 0, medkit: 0, coffee: 0 };
+        let consumables = { food: 0, medkit: 0 };
         const FOOD_HEAL_HUNGER = 40;
         const MEDKIT_HEAL_SANITY = 50;
-        const COFFEE_RESTORE_STAMINA = 80;
         
         // Traps system
         let traps = [];
@@ -549,7 +538,6 @@
             bindNukeButton();
             startBuiltInMusic();
             updateHungerStatus();
-            updateStaminaBar();
             updateConsumablesDisplay();
             updateMissionStatus();
             updateWeatherStatus();
@@ -606,15 +594,14 @@
             const count = 60;
             const foodIndex = 19;
             const medkitIndex = 35;
-            const coffeeIndex = 47;
             let nukeIndex = Math.floor(Math.random() * count);
-            while (nukeIndex === foodIndex || nukeIndex === medkitIndex || nukeIndex === coffeeIndex) {
+            while (nukeIndex === foodIndex || nukeIndex === medkitIndex) {
                 nukeIndex = Math.floor(Math.random() * count);
             }
             const rifleIndexes = new Set();
             while (rifleIndexes.size < 8) {
                 const candidate = Math.floor(Math.random() * count);
-                if (candidate !== nukeIndex && candidate !== foodIndex && candidate !== medkitIndex && candidate !== coffeeIndex) rifleIndexes.add(candidate);
+                if (candidate !== nukeIndex && candidate !== foodIndex && candidate !== medkitIndex) rifleIndexes.add(candidate);
             }
             const boxGeo = new THREE.BoxGeometry(1.3, 0.8, 0.8);
             const boxMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, roughness: 0.4 }); 
@@ -639,7 +626,6 @@
                 let reward = 'empty';
                 if (i === foodIndex) reward = 'food';
                 else if (i === medkitIndex) reward = 'medkit';
-                else if (i === coffeeIndex) reward = 'coffee';
                 else if (i === nukeIndex) reward = 'nuke';
                 else if (rifleIndexes.has(i)) reward = 'rifle';
                 chest.userData = { reward, opened: false };
@@ -795,13 +781,9 @@
                 case 'KeyE': if(isPressed) interactAction(); break;
                 case 'KeyF': if(isPressed) handleHotbarAction(); break;
                 case 'KeyQ': if(isPressed) cycleHotbarItem(); break;
-                case 'ShiftLeft':
-                case 'ShiftRight':
-                    isSprinting = isPressed && (keys.w || keys.up); 
-                    break;
+
                 case 'Digit1': if(isPressed) consumeItem('food'); break;
                 case 'Digit2': if(isPressed) consumeItem('medkit'); break;
-                case 'Digit3': if(isPressed) consumeItem('coffee'); break;
                 case 'KeyT': if(isPressed) placeTrap(); break;
             }
             // Handle WASD for movement
@@ -1027,12 +1009,6 @@
                     alertUI.style.color = "#ff00ff";
                     alertUI.innerText = "💊 Found medkit! Press 2 to use (heals sanity).";
                     setTimeout(() => alertUI.innerText = "", 3000);
-                } else if (activeChest.userData.reward === 'coffee') {
-                    consumables.coffee += 1;
-                    updateConsumablesDisplay();
-                    alertUI.style.color = "#aa6600";
-                    alertUI.innerText = "☕ Found coffee! Press 3 to drink (restores stamina).";
-                    setTimeout(() => alertUI.innerText = "", 3000);
                 } else {
                     alertUI.innerText = "Chest contained nothing... keep searching!";
                     setTimeout(() => alertUI.innerText = "", 2500);
@@ -1057,11 +1033,7 @@
             hungerBarUI.style.width = hunger + '%';
         }
 
-        function updateStaminaBar() {
-            const staminaBar = document.getElementById('stamina-bar');
-            stamina = Math.max(0, Math.min(100, stamina));
-            staminaBar.style.width = stamina + '%';
-        }
+
 
         function consumeItem(type) {
             if (type === 'food' && consumables.food > 0) {
@@ -1076,12 +1048,6 @@
                 sanity = Math.min(100, sanity + MEDKIT_HEAL_SANITY);
                 alertUI.style.color = '#ff00ff';
                 alertUI.innerText = '💊 Used medkit! Sanity restored.';
-                setTimeout(() => alertUI.innerText = '', 2000);
-            } else if (type === 'coffee' && consumables.coffee > 0) {
-                consumables.coffee--;
-                stamina = Math.min(100, stamina + COFFEE_RESTORE_STAMINA);
-                alertUI.style.color = '#aa6600';
-                alertUI.innerText = '☕ Drank coffee! Stamina restored.';
                 setTimeout(() => alertUI.innerText = '', 2000);
             }
             updateConsumablesDisplay();
@@ -1103,7 +1069,6 @@
         function updateConsumablesDisplay() {
             document.getElementById('food-count').innerText = consumables.food;
             document.getElementById('medkit-count').innerText = consumables.medkit;
-            document.getElementById('coffee-count').innerText = consumables.coffee;
         }
 
         function updateMissionStatus() {
@@ -1384,10 +1349,10 @@
             if (eventTimer > 45 && Math.random() < 0.3 && nightCounter % 5 === 0) {
                 eventTimer = 0;
                 // Supply drop: add random consumable
-                const type = ['food', 'medkit', 'coffee'][Math.floor(Math.random() * 3)];
+                const type = ['food', 'medkit'][Math.floor(Math.random() * 2)];
                 consumables[type]++;
                 alertUI.style.color = '#00ff88';
-                alertUI.innerText = `📦 Supply drop! Found ${type === 'food' ? '🥫 food' : type === 'medkit' ? '💊 medkit' : '☕ coffee'}`;
+                alertUI.innerText = `📦 Supply drop! Found ${type === 'food' ? '🥫 food' : '💊 medkit'}`;
                 setTimeout(() => alertUI.innerText = '', 3000);
                 updateConsumablesDisplay();
             }
@@ -1471,18 +1436,7 @@
         }
 
         function processMovement(delta) {
-            // Handle sprinting and stamina
-            if (isSprinting && stamina > 0) {
-                stamina -= delta * STAMINA_DRAIN_RATE;
-                if (stamina < 0) stamina = 0;
-            } else {
-                isSprinting = false;
-                stamina += delta * STAMINA_REGEN_RATE;
-                if (stamina > 100) stamina = 100;
-            }
-            updateStaminaBar();
-
-            const speedMult = isSprinting ? SPRINT_SPEED_MULT : 1.0;
+            const speedMult = 1.0;
             velocity.x -= velocity.x * 10.0 * delta;
             velocity.z -= velocity.z * 10.0 * delta;
 
