@@ -133,7 +133,7 @@
             white-space: pre-line;
         }
 
-        .tutorial-nuke-scene {
+        #tutorial-scene-frame {
             width: 100%;
             height: 128px;
             position: relative;
@@ -144,6 +144,16 @@
             box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.65);
         }
 
+        .tutorial-scene {
+            position: absolute;
+            inset: 0;
+            display: none;
+        }
+
+        .tutorial-scene.active {
+            display: block;
+        }
+
         .tutorial-ground-line {
             position: absolute;
             left: 0;
@@ -151,6 +161,224 @@
             bottom: 14px;
             height: 3px;
             background: rgba(0, 255, 204, 0.45);
+        }
+
+        .tutorial-player-dot {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #00ffcc;
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.55);
+        }
+
+        .tutorial-monster-dot {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ff3355;
+            box-shadow: 0 0 12px rgba(255, 40, 90, 0.6);
+        }
+
+        .tutorial-sanity-mini {
+            position: absolute;
+            left: 14px;
+            top: 10px;
+            width: 120px;
+            height: 12px;
+            border: 2px solid #ffffff;
+            background: rgba(0, 0, 0, 0.55);
+            overflow: hidden;
+        }
+
+        .tutorial-sanity-fill {
+            height: 100%;
+            width: 50%;
+            background: #00ffcc;
+        }
+
+        .scene-welcome-star {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: #f2f9ff;
+            animation: tutorialStarTwinkle 2.4s ease-in-out infinite;
+        }
+
+        .scene-welcome-star.s2 { left: 28%; top: 24%; animation-delay: 0.4s; }
+        .scene-welcome-star.s3 { left: 54%; top: 36%; animation-delay: 0.9s; }
+        .scene-welcome-star.s4 { left: 72%; top: 20%; animation-delay: 1.2s; }
+
+        .scene-welcome-moon {
+            position: absolute;
+            right: 18px;
+            top: 14px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #ffffff 0%, #c4e8ff 55%, #8eb3d0 100%);
+            box-shadow: 0 0 18px rgba(200, 235, 255, 0.55);
+            animation: tutorialMoonPulse 3.2s ease-in-out infinite;
+        }
+
+        .scene-welcome-runner {
+            left: 12%;
+            bottom: 24px;
+            animation: tutorialRunnerPace 4.2s ease-in-out infinite;
+        }
+
+        .scene-move-player {
+            left: 20%;
+            bottom: 24px;
+            animation: tutorialMovePath 3.8s ease-in-out infinite;
+        }
+
+        .scene-move-arrows {
+            position: absolute;
+            left: 10%;
+            top: 24px;
+            color: #ffeb3b;
+            font-weight: bold;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            animation: tutorialArrowBlink 1.1s steps(2) infinite;
+        }
+
+        .scene-look-cone {
+            position: absolute;
+            left: 48%;
+            bottom: 26px;
+            width: 70px;
+            height: 34px;
+            background: conic-gradient(from 200deg, rgba(0, 255, 204, 0.45), rgba(0, 255, 204, 0));
+            transform-origin: 0% 50%;
+            animation: tutorialLookSweep 2.3s ease-in-out infinite;
+        }
+
+        .scene-chest-player {
+            left: 10%;
+            bottom: 24px;
+            animation: tutorialChestApproach 3.6s ease-in-out infinite;
+        }
+
+        .scene-chest-base {
+            position: absolute;
+            left: 62%;
+            bottom: 18px;
+            width: 48px;
+            height: 24px;
+            border-radius: 4px;
+            background: linear-gradient(180deg, #d0842d, #8b4f12);
+            border: 2px solid #ffd089;
+        }
+
+        .scene-chest-lid {
+            position: absolute;
+            left: 62%;
+            bottom: 42px;
+            width: 48px;
+            height: 12px;
+            border-radius: 4px;
+            background: linear-gradient(180deg, #f2b25e, #9e6025);
+            border: 2px solid #ffd089;
+            transform-origin: 6% 100%;
+            animation: tutorialChestOpen 3.6s ease-in-out infinite;
+        }
+
+        .scene-chest-loot {
+            position: absolute;
+            left: 68%;
+            bottom: 52px;
+            color: #00ffcc;
+            font-weight: bold;
+            font-size: 0.85rem;
+            opacity: 0;
+            animation: tutorialLootPop 3.6s ease-in-out infinite;
+        }
+
+        .scene-safe-ring {
+            position: absolute;
+            left: 62%;
+            bottom: 18px;
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 0, 255, 0.85);
+            box-shadow: 0 0 16px rgba(255, 0, 255, 0.35);
+            animation: tutorialSafePulse 2.2s ease-in-out infinite;
+        }
+
+        .scene-safe-player {
+            left: 10%;
+            bottom: 24px;
+            animation: tutorialEnterSafeZone 3.5s ease-in-out infinite;
+        }
+
+        .scene-safe-sanity .tutorial-sanity-fill {
+            animation: tutorialSanityFill 3.5s ease-in-out infinite;
+        }
+
+        .scene-combat-player {
+            left: 20%;
+            bottom: 24px;
+        }
+
+        .scene-combat-monster {
+            left: 68%;
+            bottom: 24px;
+            animation: tutorialMonsterStun 3s ease-in-out infinite;
+        }
+
+        .scene-rifle-beam {
+            position: absolute;
+            left: 24%;
+            bottom: 30px;
+            width: 52%;
+            height: 4px;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0), #ffffff 25%, #7cff83 100%);
+            opacity: 0;
+            animation: tutorialRifleShot 3s ease-in-out infinite;
+        }
+
+        .scene-trap {
+            position: absolute;
+            left: 46%;
+            bottom: 16px;
+            width: 26px;
+            height: 9px;
+            border: 2px solid #ffeb3b;
+            border-radius: 10px;
+            opacity: 0.6;
+            animation: tutorialTrapSnap 3s ease-in-out infinite;
+        }
+
+        .scene-weather-rain {
+            position: absolute;
+            inset: 0;
+            background-image: repeating-linear-gradient(110deg, rgba(130, 190, 255, 0) 0px, rgba(130, 190, 255, 0) 9px, rgba(130, 190, 255, 0.45) 10px, rgba(130, 190, 255, 0.45) 12px);
+            background-size: 220px 120px;
+            animation: tutorialRainShift 0.6s linear infinite;
+            opacity: 0.65;
+        }
+
+        .scene-weather-lightning {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 64% 18%, rgba(255, 255, 255, 0.9) 0%, rgba(220, 240, 255, 0.2) 28%, rgba(255, 255, 255, 0) 60%);
+            opacity: 0;
+            animation: tutorialLightningFlash 2.5s ease-in-out infinite;
+        }
+
+        .scene-weather-sanity .tutorial-sanity-fill {
+            animation: tutorialSanityDrain 3.2s ease-in-out infinite;
+            background: #ff5577;
+        }
+
+        .tutorial-nuke-scene {
+            position: relative;
+            inset: 0;
         }
 
         .tutorial-nuke {
@@ -272,6 +500,107 @@
             60% { opacity: 0.85; }
             70% { opacity: 0.28; }
             100% { opacity: 0; }
+        }
+
+        @keyframes tutorialStarTwinkle {
+            0%, 100% { opacity: 0.25; transform: scale(0.85); }
+            50% { opacity: 1; transform: scale(1.25); }
+        }
+
+        @keyframes tutorialMoonPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        @keyframes tutorialRunnerPace {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(52px); }
+        }
+
+        @keyframes tutorialMovePath {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(42px, -8px); }
+            50% { transform: translate(88px, 2px); }
+            75% { transform: translate(42px, 10px); }
+        }
+
+        @keyframes tutorialArrowBlink {
+            0%, 100% { opacity: 0.45; }
+            50% { opacity: 1; }
+        }
+
+        @keyframes tutorialLookSweep {
+            0%, 100% { transform: rotate(-24deg); opacity: 0.28; }
+            50% { transform: rotate(24deg); opacity: 0.75; }
+        }
+
+        @keyframes tutorialChestApproach {
+            0%, 100% { transform: translateX(0); }
+            45% { transform: translateX(170px); }
+            65% { transform: translateX(170px); }
+        }
+
+        @keyframes tutorialChestOpen {
+            0%, 46%, 100% { transform: rotate(0deg); }
+            58%, 82% { transform: rotate(-52deg); }
+        }
+
+        @keyframes tutorialLootPop {
+            0%, 56%, 100% { opacity: 0; transform: translateY(6px); }
+            64%, 84% { opacity: 1; transform: translateY(-10px); }
+        }
+
+        @keyframes tutorialSafePulse {
+            0%, 100% { transform: scale(1); opacity: 0.65; }
+            50% { transform: scale(1.08); opacity: 1; }
+        }
+
+        @keyframes tutorialEnterSafeZone {
+            0%, 100% { transform: translateX(0); }
+            58% { transform: translateX(185px); }
+            82% { transform: translateX(185px); }
+        }
+
+        @keyframes tutorialSanityFill {
+            0%, 40% { width: 32%; }
+            70%, 100% { width: 96%; }
+        }
+
+        @keyframes tutorialRifleShot {
+            0%, 28%, 100% { opacity: 0; }
+            34% { opacity: 1; }
+            42% { opacity: 0; }
+        }
+
+        @keyframes tutorialMonsterStun {
+            0%, 30%, 100% { transform: translateX(0); }
+            36%, 46% { transform: translateX(14px); }
+            52%, 62% { transform: translateX(-10px); }
+            68%, 78% { transform: translateX(8px); }
+        }
+
+        @keyframes tutorialTrapSnap {
+            0%, 44%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.4); opacity: 1; }
+            58% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        @keyframes tutorialRainShift {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 30px; }
+        }
+
+        @keyframes tutorialLightningFlash {
+            0%, 65%, 100% { opacity: 0; }
+            68% { opacity: 1; }
+            72% { opacity: 0.12; }
+            76% { opacity: 0.85; }
+            82% { opacity: 0; }
+        }
+
+        @keyframes tutorialSanityDrain {
+            0%, 20% { width: 95%; }
+            70%, 100% { width: 25%; }
         }
 
         .tutorial-controls {
@@ -550,15 +879,65 @@
             <div>
                 <div id="tutorial-step-count">STEP 1 / 7</div>
                 <h2 id="tutorial-step-title">Welcome to 99 Nights</h2>
-                <div class="tutorial-nuke-scene" aria-hidden="true">
-                    <div class="tutorial-ground-line"></div>
-                    <div class="tutorial-nuke"></div>
-                    <div class="tutorial-shockwave"></div>
-                    <div class="tutorial-mushroom">
-                        <div class="tutorial-mushroom-core"></div>
-                        <div class="tutorial-mushroom-cap"></div>
+                <div id="tutorial-scene-frame" aria-hidden="true">
+                    <div class="tutorial-scene active" data-scene="welcome">
+                        <div class="tutorial-ground-line"></div>
+                        <div class="scene-welcome-star" style="left: 12%; top: 18%;"></div>
+                        <div class="scene-welcome-star s2"></div>
+                        <div class="scene-welcome-star s3"></div>
+                        <div class="scene-welcome-star s4"></div>
+                        <div class="scene-welcome-moon"></div>
+                        <div class="tutorial-player-dot scene-welcome-runner"></div>
+                        <div class="tutorial-monster-dot" style="left: 56%; bottom: 24px;"></div>
                     </div>
-                    <div class="tutorial-flash"></div>
+
+                    <div class="tutorial-scene" data-scene="movement">
+                        <div class="tutorial-ground-line"></div>
+                        <div class="scene-move-arrows">W A S D / ▲ ◀ ▼ ▶</div>
+                        <div class="tutorial-player-dot scene-move-player"></div>
+                        <div class="scene-look-cone"></div>
+                    </div>
+
+                    <div class="tutorial-scene" data-scene="chest">
+                        <div class="tutorial-ground-line"></div>
+                        <div class="tutorial-player-dot scene-chest-player"></div>
+                        <div class="scene-chest-base"></div>
+                        <div class="scene-chest-lid"></div>
+                        <div class="scene-chest-loot">+ LOOT</div>
+                    </div>
+
+                    <div class="tutorial-scene scene-safe-sanity" data-scene="safezone">
+                        <div class="tutorial-ground-line"></div>
+                        <div class="tutorial-sanity-mini"><div class="tutorial-sanity-fill"></div></div>
+                        <div class="tutorial-player-dot scene-safe-player"></div>
+                        <div class="scene-safe-ring"></div>
+                    </div>
+
+                    <div class="tutorial-scene" data-scene="combat">
+                        <div class="tutorial-ground-line"></div>
+                        <div class="tutorial-player-dot scene-combat-player"></div>
+                        <div class="tutorial-monster-dot scene-combat-monster"></div>
+                        <div class="scene-rifle-beam"></div>
+                        <div class="scene-trap"></div>
+                    </div>
+
+                    <div class="tutorial-scene scene-weather-sanity" data-scene="weather">
+                        <div class="tutorial-ground-line"></div>
+                        <div class="tutorial-sanity-mini"><div class="tutorial-sanity-fill"></div></div>
+                        <div class="scene-weather-rain"></div>
+                        <div class="scene-weather-lightning"></div>
+                    </div>
+
+                    <div class="tutorial-scene tutorial-nuke-scene" data-scene="nuke">
+                        <div class="tutorial-ground-line"></div>
+                        <div class="tutorial-nuke"></div>
+                        <div class="tutorial-shockwave"></div>
+                        <div class="tutorial-mushroom">
+                            <div class="tutorial-mushroom-core"></div>
+                            <div class="tutorial-mushroom-cap"></div>
+                        </div>
+                        <div class="tutorial-flash"></div>
+                    </div>
                 </div>
                 <p id="tutorial-step-body"></p>
             </div>
@@ -809,36 +1188,44 @@
         const tutorialStepBody = document.getElementById('tutorial-step-body');
         const tutorialPrevBtn = document.getElementById('tutorial-prev');
         const tutorialNextBtn = document.getElementById('tutorial-next');
+        const tutorialScenes = document.querySelectorAll('.tutorial-scene');
         let tutorialIndex = 0;
 
         const tutorialSteps = [
             {
                 title: 'Welcome to 99 Nights',
-                body: 'You must survive in the forest, avoid monsters, and search chests until you find the tactical nuke.\n\nYour final goal: launch the nuke before the monsters rip you apart.'
+                body: 'You must survive in the forest, avoid monsters, and search chests until you find the tactical nuke.\n\nYour final goal: launch the nuke before the monsters rip you apart.',
+                scene: 'welcome'
             },
             {
                 title: 'Movement and Camera',
-                body: 'Desktop:\n- Move with Arrow Keys or WASD\n- Look around with mouse (click game to lock cursor)\n\nMobile:\n- Left joystick and arrow buttons move you\n- Right side of screen controls your look direction'
+                body: 'Desktop:\n- Move with Arrow Keys or WASD\n- Look around with mouse (click game to lock cursor)\n\nMobile:\n- Left joystick and arrow buttons move you\n- Right side of screen controls your look direction',
+                scene: 'movement'
             },
             {
                 title: 'Open Chests',
-                body: 'Look at a chest until the interaction prompt appears.\n\nDesktop: press E\nMobile: tap USE\n\nChests can contain medkits, rifle, empty loot, or the nuke.'
+                body: 'Look at a chest until the interaction prompt appears.\n\nDesktop: press E\nMobile: tap USE\n\nChests can contain medkits, rifle, empty loot, or the nuke.',
+                scene: 'chest'
             },
             {
                 title: 'Safe Houses and Sanity',
-                body: 'Purple glowing cabins are safe zones. While inside, monsters lose chase and your sanity recovers faster.\n\nIf sanity reaches 0, you lose.'
+                body: 'Purple glowing cabins are safe zones. While inside, monsters lose chase and your sanity recovers faster.\n\nIf sanity reaches 0, you lose.',
+                scene: 'safezone'
             },
             {
                 title: 'Combat and Tools',
-                body: 'Rifle:\n- Get it from chests (disabled on Hard)\n- Press Q to cycle items, F to draw/fire\n\nMedkit:\n- Press 2 to heal sanity\n\nTrap:\n- Press T to place trap (limited count and cooldown)'
+                body: 'Rifle:\n- Get it from chests (disabled on Hard)\n- Press Q to cycle items, F to draw/fire\n\nMedkit:\n- Press 2 to heal sanity\n\nTrap:\n- Press T to place trap (limited count and cooldown)',
+                scene: 'combat'
             },
             {
                 title: 'Weather and Danger',
-                body: 'Weather changes over time. Storms drain sanity faster and can call deadly lightning strikes.\n\nKeep moving, use safe zones, and avoid open areas during thunder.'
+                body: 'Weather changes over time. Storms drain sanity faster and can call deadly lightning strikes.\n\nKeep moving, use safe zones, and avoid open areas during thunder.',
+                scene: 'weather'
             },
             {
                 title: 'Winning the Run',
-                body: 'When you find the nuke chest, a big launch button appears. Trigger it quickly.\n\nGood luck surviving all the nights in the forest.'
+                body: 'When you find the nuke chest, a big launch button appears. Trigger it quickly.\n\nGood luck surviving all the nights in the forest.',
+                scene: 'nuke'
             }
         ];
 
@@ -847,6 +1234,9 @@
             tutorialStepCount.innerText = `STEP ${tutorialIndex + 1} / ${tutorialSteps.length}`;
             tutorialStepTitle.innerText = step.title;
             tutorialStepBody.innerText = step.body;
+            tutorialScenes.forEach((scene) => {
+                scene.classList.toggle('active', scene.dataset.scene === step.scene);
+            });
             tutorialPrevBtn.style.visibility = tutorialIndex === 0 ? 'hidden' : 'visible';
             tutorialNextBtn.innerText = tutorialIndex === tutorialSteps.length - 1 ? 'FINISH' : 'NEXT ▶';
         }
