@@ -603,6 +603,96 @@
             70%, 100% { width: 25%; }
         }
 
+        .scene-michelo-dot {
+            position: absolute;
+            left: 68%;
+            bottom: 24px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #7744ff;
+            box-shadow: 0 0 12px rgba(119, 68, 255, 0.75);
+            animation: micheloAngelFull 4s ease-in-out infinite;
+        }
+
+        .scene-michelo-eye {
+            position: absolute;
+            left: 38%;
+            bottom: 28px;
+            width: 22px;
+            height: 13px;
+            border-radius: 50%;
+            border: 2px solid #00ffcc;
+            animation: micheloEyeLook 3.6s ease-in-out infinite;
+        }
+
+        .scene-michelo-eye::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #00ffcc;
+            animation: micheloEyePupil 3.6s ease-in-out infinite;
+        }
+
+        .scene-michelo-label {
+            position: absolute;
+            left: 0; right: 0;
+            top: 6px;
+            color: #ff3355;
+            font-weight: bold;
+            font-size: 0.75rem;
+            text-align: center;
+            letter-spacing: 1px;
+            animation: micheloLabelBlink 1.4s steps(2) infinite;
+        }
+
+        .scene-katty-dot {
+            position: absolute;
+            left: 72%;
+            bottom: 24px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ff4400;
+            box-shadow: 0 0 14px rgba(255, 80, 0, 0.85);
+            animation: kattyEmerge 3.2s ease-in-out infinite;
+        }
+
+        @keyframes micheloAngelFull {
+            0% { transform: translateX(0); }
+            50% { transform: translateX(0); }       /* frozen while watched */
+            52% { transform: translateX(-5px); }    /* starts moving when eye looks away */
+            75% { transform: translateX(-50px); }   /* rushes in */
+            78% { transform: translateX(-60px); }   /* reset */
+            80% { transform: translateX(0px); }
+            100% { transform: translateX(0px); }
+        }
+
+        @keyframes micheloEyeLook {
+            0%, 45% { transform: translateX(0); }         /* looking at Michelo */
+            55%, 100% { transform: translateX(-28px); }  /* looking away */
+        }
+
+        @keyframes micheloEyePupil {
+            0%, 45% { transform: translateX(4px); }
+            55%, 100% { transform: translateX(-4px); }
+        }
+
+        @keyframes micheloLabelBlink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        @keyframes kattyEmerge {
+            0%, 20% { opacity: 0; transform: scale(0.2); }
+            40%, 72% { opacity: 1; transform: scale(1); }
+            90%, 100% { opacity: 0; transform: scale(1.3); }
+        }
+
         .tutorial-controls {
             display: flex;
             gap: 10px;
@@ -938,6 +1028,23 @@
                         </div>
                         <div class="tutorial-flash"></div>
                     </div>
+
+                    <div class="tutorial-scene" data-scene="michelo">
+                        <div class="tutorial-ground-line"></div>
+                        <div class="scene-michelo-label">DON'T LOOK AWAY</div>
+                        <div class="tutorial-player-dot" style="left: 20%; bottom: 24px;"></div>
+                        <div class="scene-michelo-eye"></div>
+                        <div class="tutorial-monster-dot scene-michelo-dot"></div>
+                    </div>
+
+                    <div class="tutorial-scene scene-weather-sanity" data-scene="katty">
+                        <div class="tutorial-ground-line"></div>
+                        <div class="tutorial-sanity-mini"><div class="tutorial-sanity-fill"></div></div>
+                        <div class="scene-weather-rain"></div>
+                        <div class="scene-weather-lightning"></div>
+                        <div class="tutorial-player-dot" style="left: 20%; bottom: 24px;"></div>
+                        <div class="tutorial-monster-dot scene-katty-dot"></div>
+                    </div>
                 </div>
                 <p id="tutorial-step-body"></p>
             </div>
@@ -1143,6 +1250,22 @@
         let micheloStunnedUntil = 0;
         let micheloChaseAlerted = false;
 
+        // Katty enemy (storm-exclusive)
+        let katty = null;
+        let kattyName3D = null;
+        let kattyState = 'DORMANT'; // DORMANT, WANDER, CHASE, COOLDOWN, STUN
+        let kattyTimer = 0;
+        let kattyStillTimer = 0;   // counts seconds player stays still while Katty is chasing
+        const KATTY_CHASE_MAX = 7.0;
+        const KATTY_STILL_MAX = 15.0; // seconds of stillness needed to make Katty leave
+        const KATTY_COOLDOWN_MAX = 3.0;
+        let kattyStunnedUntil = 0;
+        let kattyChaseAlerted = false;
+
+        // Player movement tracking (used by Katty)
+        let playerIsMoving = false;
+        const prevPlayerPos = new THREE.Vector3();
+
         // --- Controls Mapping ---
         const velocity = new THREE.Vector3();
         const inputDir = new THREE.Vector3();
@@ -1226,6 +1349,16 @@
                 title: 'Winning the Run',
                 body: 'When you find the nuke chest, a big launch button appears. Trigger it quickly.\n\nGood luck surviving all the nights in the forest.',
                 scene: 'nuke'
+            },
+            {
+                title: 'Michelo — The Watcher',
+                body: 'Michelo is unlike the others.\n\nHe FREEZES completely whenever you look directly at him — but the moment you look away, he closes the distance at high speed.\n\nKeep your eyes on Michelo when he is near. Glancing away even briefly can be fatal.',
+                scene: 'michelo'
+            },
+            {
+                title: 'Katty — Storm Stalker',
+                body: 'When a thunderstorm begins, Katty emerges from the lightning.\n\nKatty only hunts you if you MOVE. If she gets near and you keep walking, she will chase you down and kill you.\n\nSTAY COMPLETELY STILL for 15 seconds and she will retreat. The moment you move again, the hunt resumes.\n\nOnly the rifle can stun her.',
+                scene: 'katty'
             }
         ];
 
@@ -1345,6 +1478,7 @@
             spawnBobby3D();
             spawnPetty3D();
             spawnMichelo3D();
+            spawnKatty3D();
 
             if(!isMobile) {
                 document.addEventListener('keydown', (e) => handleKeys(e, true));
@@ -1627,6 +1761,44 @@
             micheloName3D = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.625), new THREE.MeshBasicMaterial({ map: tex3, side: THREE.DoubleSide }));
             micheloName3D.position.y = 3.7;
             michelo.add(micheloName3D);
+        }
+
+        function spawnKatty3D() {
+            katty = new THREE.Group();
+            const fireMat = new THREE.MeshStandardMaterial({ color: 0xff4400, emissive: 0xff2200, emissiveIntensity: 0.85, roughness: 0.4 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x220000, roughness: 1.0 });
+
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.38, 14, 14), fireMat);
+            head.position.y = 2.8; katty.add(head);
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3), darkMat);
+            torso.position.y = 2.0; katty.add(torso);
+            const limbGeo = new THREE.CylinderGeometry(0.045, 0.045, 1.05);
+            const armL = new THREE.Mesh(limbGeo, fireMat); armL.position.set(-0.38, 2.0, 0); armL.rotation.z = Math.PI / 4; katty.add(armL);
+            const armR = new THREE.Mesh(limbGeo, fireMat); armR.position.set(0.38, 2.0, 0); armR.rotation.z = -Math.PI / 4; katty.add(armR);
+            const legL = new THREE.Mesh(limbGeo, darkMat); legL.position.set(-0.2, 0.65, 0); legL.rotation.z = 0.08; katty.add(legL);
+            const legR = new THREE.Mesh(limbGeo, darkMat); legR.position.set(0.2, 0.65, 0); legR.rotation.z = -0.08; katty.add(legR);
+
+            // Lightning crown on head
+            const crown = new THREE.Mesh(
+                new THREE.ConeGeometry(0.32, 0.55, 4),
+                new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffaa00, emissiveIntensity: 1.2 })
+            );
+            crown.position.y = 3.4; katty.add(crown);
+
+            katty.position.set(110, 0, -110);
+            katty.visible = false;
+            scene.add(katty);
+
+            const canv4 = document.createElement('canvas'); canv4.width = 256; canv4.height = 64;
+            const c4 = canv4.getContext('2d');
+            c4.fillStyle = 'rgba(220, 80, 0, 0.9)'; c4.fillRect(0, 0, 256, 64);
+            c4.font = 'Bold 36px monospace'; c4.fillStyle = '#fff'; c4.textAlign = 'center'; c4.textBaseline = 'middle';
+            c4.fillText('KATTY', 128, 32);
+
+            const tex4 = new THREE.CanvasTexture(canv4);
+            kattyName3D = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 0.625), new THREE.MeshBasicMaterial({ map: tex4, side: THREE.DoubleSide }));
+            kattyName3D.position.y = 3.7;
+            katty.add(kattyName3D);
         }
 
         function handleKeys(e, isPressed) {
@@ -1948,6 +2120,12 @@
                 pettyStunnedUntil = performance.now() / 1000 + getStunDuration();
                 stunnedAny = true;
             }
+            if (kattyState === 'CHASE') {
+                kattyState = 'STUN';
+                kattyTimer = 0;
+                kattyStunnedUntil = performance.now() / 1000 + getStunDuration();
+                stunnedAny = true;
+            }
 
             if (!stunnedAny) {
                 alertUI.style.color = '#ffeb3b';
@@ -1975,6 +2153,7 @@
             if(petty) petty.visible = true;
             if(bobbyName3D) bobbyName3D.visible = true;
             if(pettyName3D) pettyName3D.visible = true;
+            if(katty) katty.visible = false;
             nukeButton.style.display = 'none';
             nukePromptUI.style.display = 'none';
             document.getElementById('victory-message').innerText = 'The mushroom cloud swallowed Bobby whole and he had a terrible fate. But, You survived.';
@@ -2026,7 +2205,7 @@
                     const sequence = [65, 62, 58, 49];
                     let pitch = sequence[Math.floor(Math.random() * sequence.length)];
                     
-                    if(bobbyState === 'CHASE' || pettyState === 'CHASE' || micheloState === 'CHASE') {
+                    if(bobbyState === 'CHASE' || pettyState === 'CHASE' || micheloState === 'CHASE' || kattyState === 'CHASE') {
                         osc.type = 'sawtooth';
                         pitch *= 1.75; 
                         gain.gain.setValueAtTime(0.95, audioCtx.currentTime);
@@ -2334,6 +2513,16 @@
                     alertUI.innerText = '🎯 Michelo caught in trap!';
                     setTimeout(() => alertUI.innerText = '', 1500);
                 }
+
+                // Check katty
+                if (katty && katty.visible && katty.position.distanceTo(trap.pos) < 2 && trap.active) {
+                    kattyStunnedUntil = Math.max(kattyStunnedUntil, performance.now() / 1000 + getStunDuration());
+                    kattyState = 'STUN';
+                    trap.active = false;
+                    alertUI.style.color = '#ffff00';
+                    alertUI.innerText = '🎯 Katty caught in trap!';
+                    setTimeout(() => alertUI.innerText = '', 1500);
+                }
             }
         }
 
@@ -2388,7 +2577,9 @@
             }
             if (isGameOver) return;
 
+            prevPlayerPos.copy(camera.position);
             processMovement(delta);
+            playerIsMoving = camera.position.distanceTo(prevPlayerPos) > 0.015;
             processEnvironmentCycle(delta);
             processRifleCooldown(delta);
             processStunTimers(delta);
@@ -2399,6 +2590,7 @@
             processBobbyAI(delta);
             processPettyAI(delta);
             processMicheloAI(delta);
+            processKattyAI(delta);
             processMonsterSanityDrain(delta);
             updateMissionStatus();
             updateWeatherStatus();
@@ -2426,6 +2618,7 @@
             totalDrain += getMonsterFearDrain(bobby, bobbyState, playerPos, delta);
             totalDrain += getMonsterFearDrain(petty, pettyState, playerPos, delta);
             totalDrain += getMonsterFearDrain(michelo, micheloState, playerPos, delta);
+            totalDrain += getMonsterFearDrain(katty, kattyState, playerPos, delta);
 
             if (totalDrain > 0) {
                 sanity -= totalDrain;
@@ -2452,6 +2645,10 @@
             if (micheloState === 'STUN' && now >= micheloStunnedUntil) {
                 micheloState = 'WANDER';
                 micheloTimer = 0;
+            }
+            if (kattyState === 'STUN' && now >= kattyStunnedUntil) {
+                kattyState = currentWeather === 'storm' ? 'WANDER' : 'DORMANT';
+                kattyTimer = 0;
             }
         }
 
@@ -2722,52 +2919,69 @@
             }
         }
 
+        function isLookingAtMichelo() {
+            if (!michelo) return false;
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const toMichelo = new THREE.Vector3(
+                michelo.position.x - camera.position.x,
+                0,
+                michelo.position.z - camera.position.z
+            ).normalize();
+            return forward.dot(toMichelo) > 0.55;
+        }
+
         function processMicheloAI(delta) {
-            if(!michelo) return;
+            if (!michelo) return;
             const playerPos = new THREE.Vector3(camera.position.x, 0, camera.position.z);
-            if(micheloName3D) micheloName3D.lookAt(camera.position);
+            if (micheloName3D) micheloName3D.lookAt(camera.position);
 
             const distance = michelo.position.distanceTo(playerPos);
+
+            // Weeping Angel: Michelo completely freezes when the player is looking at him
+            if (micheloState !== 'STUN' && isLookingAtMichelo()) {
+                michelo.lookAt(playerPos);
+                return;
+            }
+
             const rifleAggro = rifleOwned && !playerInSafeZone;
 
-            if (rifleAggro) {
+            if (rifleAggro && micheloState !== 'STUN') {
                 micheloState = 'CHASE';
                 micheloTimer = 0;
             }
 
-            switch(micheloState) {
+            switch (micheloState) {
                 case 'WANDER':
                     michelo.lookAt(playerPos);
-                    if(rifleAggro || (!playerInSafeZone && distance < 60 * difficultyModifiers.enemyDetectionMult)) {
+                    if (rifleAggro || (!playerInSafeZone && distance < 60 * difficultyModifiers.enemyDetectionMult)) {
                         micheloState = 'CHASE';
                         micheloTimer = 0;
                         micheloChaseAlerted = false;
                     } else {
-                        const wanderDir = new THREE.Vector3(Math.cos(timeOfDay*0.9), 0, Math.sin(timeOfDay*0.9)).normalize();
-                        michelo.position.addScaledVector(wanderDir, 3.5 * delta * difficultyModifiers.enemySpeedMult);
+                        // Slowly drifts toward player when not watched
+                        const toPlayer = playerPos.clone().sub(michelo.position).normalize();
+                        michelo.position.addScaledVector(toPlayer, 4.5 * delta * difficultyModifiers.enemySpeedMult);
                     }
                     break;
 
-                case 'CHASE':
+                case 'CHASE': {
                     if (!micheloChaseAlerted) {
                         micheloChaseAlerted = true;
                         playAlertSound();
                         alertUI.style.color = '#7744ff';
-                        alertUI.innerText = '⚠️ MICHELO IS COMING,RUN! ⚠️';
+                        alertUI.innerText = "⚠️ DON'T LOOK AWAY FROM MICHELO! ⚠️";
                         setTimeout(() => alertUI.innerText = '', 2500);
                     }
 
                     michelo.lookAt(playerPos);
-                    const chaseDir = playerPos.clone().sub(michelo.position).normalize();
-                    michelo.position.addScaledVector(chaseDir, (rifleAggro ? 16.0 : 12.5) * delta * difficultyModifiers.enemySpeedMult);
+                    const micheloChaseDir = playerPos.clone().sub(michelo.position).normalize();
+                    // Faster than normal — dangerous when you look away
+                    michelo.position.addScaledVector(micheloChaseDir, (rifleAggro ? 20.0 : 16.0) * delta * difficultyModifiers.enemySpeedMult);
 
-                    if (rifleAggro) {
-                        micheloState = 'CHASE';
-                        micheloTimer = 0;
-                    }
+                    if (rifleAggro) micheloTimer = 0;
 
                     micheloTimer += delta;
-                    if(!rifleAggro && (playerInSafeZone || micheloTimer >= MICHELO_CHASE_MAX)) {
+                    if (!rifleAggro && (playerInSafeZone || micheloTimer >= MICHELO_CHASE_MAX)) {
                         micheloState = 'COOLDOWN';
                         micheloTimer = 0;
                         micheloChaseAlerted = false;
@@ -2776,23 +2990,121 @@
                         setTimeout(() => alertUI.innerText = '', 2500);
                     }
 
-                    if(distance < 4.8 && !playerInSafeZone) {
+                    if (distance < 4.8 && !playerInSafeZone) {
                         startDeathCutscene('Michelo');
                     }
                     break;
+                }
 
-                case 'COOLDOWN':
-                    const fleeDir3 = michelo.position.clone().sub(playerPos).normalize();
-                    michelo.position.addScaledVector(fleeDir3, 4.0 * delta * difficultyModifiers.enemySpeedMult);
-
+                case 'COOLDOWN': {
+                    const micheloFleeDir = michelo.position.clone().sub(playerPos).normalize();
+                    michelo.position.addScaledVector(micheloFleeDir, 4.0 * delta * difficultyModifiers.enemySpeedMult);
                     micheloTimer += delta;
-                    if(micheloTimer >= MICHELO_COOLDOWN_MAX) {
-                        micheloState = 'WANDER';
-                    }
+                    if (micheloTimer >= MICHELO_COOLDOWN_MAX) micheloState = 'WANDER';
                     break;
+                }
 
                 case 'STUN':
                     michelo.lookAt(playerPos);
+                    break;
+            }
+        }
+
+        function processKattyAI(delta) {
+            if (!katty) return;
+            const playerPos = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+            if (kattyName3D) kattyName3D.lookAt(camera.position);
+
+            // Katty only active during storms
+            if (currentWeather !== 'storm') {
+                if (kattyState !== 'DORMANT' && kattyState !== 'STUN') {
+                    kattyState = 'DORMANT';
+                    kattyChaseAlerted = false;
+                    kattyStillTimer = 0;
+                }
+                katty.visible = false;
+                return;
+            }
+
+            // Activate from dormancy when storm begins
+            katty.visible = true;
+            if (kattyState === 'DORMANT') {
+                kattyState = 'WANDER';
+                kattyTimer = 0;
+                kattyStillTimer = 0;
+                alertUI.style.color = '#ff6600';
+                alertUI.innerText = '⚡ KATTY HAS EMERGED FROM THE STORM! ⚡';
+                setTimeout(() => alertUI.innerText = '', 3000);
+            }
+
+            const distance = katty.position.distanceTo(playerPos);
+
+            switch (kattyState) {
+                case 'WANDER':
+                    katty.lookAt(playerPos);
+                    // Katty only triggers a chase if the player is MOVING within range
+                    if (!playerInSafeZone && playerIsMoving && distance < 70 * difficultyModifiers.enemyDetectionMult) {
+                        kattyState = 'CHASE';
+                        kattyTimer = 0;
+                        kattyStillTimer = 0;
+                        kattyChaseAlerted = false;
+                    } else {
+                        const wanderDir = new THREE.Vector3(Math.cos(timeOfDay * 1.7), 0, Math.sin(timeOfDay * 1.7)).normalize();
+                        katty.position.addScaledVector(wanderDir, 6.0 * delta * difficultyModifiers.enemySpeedMult);
+                    }
+                    break;
+
+                case 'CHASE': {
+                    if (!kattyChaseAlerted) {
+                        kattyChaseAlerted = true;
+                        playAlertSound();
+                        alertUI.style.color = '#ff6600';
+                        alertUI.innerText = '⚡ KATTY IS NEAR — STOP MOVING OR DIE! ⚡';
+                        setTimeout(() => alertUI.innerText = '', 3000);
+                    }
+
+                    if (playerIsMoving) {
+                        // Player is moving — Katty hunts
+                        kattyStillTimer = 0;
+                        katty.lookAt(playerPos);
+                        const kattyChaseDir = playerPos.clone().sub(katty.position).normalize();
+                        katty.position.addScaledVector(kattyChaseDir, 22.0 * delta * difficultyModifiers.enemySpeedMult);
+
+                        if (distance < 5.0 && !playerInSafeZone) {
+                            startDeathCutscene('Katty');
+                        }
+                    } else {
+                        // Player is still — Katty freezes and counts down
+                        kattyStillTimer += delta;
+                        katty.lookAt(playerPos);
+
+                        const remaining = Math.ceil(KATTY_STILL_MAX - kattyStillTimer);
+                        alertUI.style.color = '#ff9900';
+                        alertUI.innerText = `🧊 DON'T MOVE — Katty leaves in ${remaining}s`;
+
+                        if (playerInSafeZone || kattyStillTimer >= KATTY_STILL_MAX) {
+                            kattyState = 'COOLDOWN';
+                            kattyTimer = 0;
+                            kattyStillTimer = 0;
+                            kattyChaseAlerted = false;
+                            alertUI.style.color = '#ffaa44';
+                            alertUI.innerText = 'Katty retreated back into the storm...';
+                            setTimeout(() => alertUI.innerText = '', 2500);
+                        }
+                    }
+                    break;
+                }
+
+                case 'COOLDOWN': {
+                    const kattyFleeDir = katty.position.clone().sub(playerPos).normalize();
+                    katty.position.addScaledVector(kattyFleeDir, 5.0 * delta * difficultyModifiers.enemySpeedMult);
+                    kattyTimer += delta;
+                    if (kattyTimer >= KATTY_COOLDOWN_MAX) kattyState = 'WANDER';
+                    break;
+                }
+
+                case 'STUN':
+                    katty.lookAt(playerPos);
                     break;
             }
         }
