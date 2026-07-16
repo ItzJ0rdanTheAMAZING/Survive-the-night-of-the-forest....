@@ -1245,6 +1245,9 @@
         let micheloName3D = null;
         let micheloState = 'WANDER';
         let micheloTimer = 0;
+        let micheloLookLockTimer = 0;
+        let micheloLookLockActive = false;
+        const MICHELO_STARE_LOCK_DURATION = 15.0;
         const MICHELO_CHASE_MAX = 5.5;
         const MICHELO_COOLDOWN_MAX = 3.5;
         let micheloStunnedUntil = 0;
@@ -1441,6 +1444,8 @@
             inventory.rifle = false;
             selectedHotbarItem = null;
             hotbarItemDrawn = false;
+            micheloLookLockTimer = 0;
+            micheloLookLockActive = false;
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x05100d);
@@ -2930,17 +2935,54 @@
             return forward.dot(toMichelo) > 0.55;
         }
 
+        function forceLookAtMichelo() {
+            if (!michelo) return;
+            const lookTarget = new THREE.Vector3(michelo.position.x, camera.position.y, michelo.position.z);
+            camera.lookAt(lookTarget);
+            const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+            cameraRotation.x = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, euler.x));
+            cameraRotation.y = euler.y;
+        }
+
         function processMicheloAI(delta) {
             if (!michelo) return;
             const playerPos = new THREE.Vector3(camera.position.x, 0, camera.position.z);
             if (micheloName3D) micheloName3D.lookAt(camera.position);
 
             const distance = michelo.position.distanceTo(playerPos);
+            const lookingAtMichelo = isLookingAtMichelo();
 
-            // Weeping Angel: Michelo completely freezes when the player is looking at him
-            if (micheloState !== 'STUN' && isLookingAtMichelo()) {
-                michelo.lookAt(playerPos);
-                return;
+            if (micheloState !== 'STUN') {
+                if (lookingAtMichelo && !micheloLookLockActive) {
+                    micheloLookLockActive = true;
+                    micheloLookLockTimer = MICHELO_STARE_LOCK_DURATION;
+                }
+
+                if (micheloLookLockActive && micheloLookLockTimer > 0) {
+                    micheloLookLockTimer = Math.max(0, micheloLookLockTimer - delta);
+                    if (!lookingAtMichelo) {
+                        forceLookAtMichelo();
+                    }
+                    alertUI.style.color = '#b595ff';
+                    alertUI.innerText = `👁️ Keep staring at Michelo: ${micheloLookLockTimer.toFixed(1)}s`;
+                    michelo.lookAt(playerPos);
+                    return;
+                }
+
+                if (micheloLookLockActive && micheloLookLockTimer <= 0) {
+                    micheloLookLockActive = false;
+                    alertUI.style.color = '#9999ff';
+                    alertUI.innerText = 'You can look away from Michelo now.';
+                    setTimeout(() => {
+                        if (alertUI.innerText === 'You can look away from Michelo now.') alertUI.innerText = '';
+                    }, 1200);
+                }
+
+                // Weeping Angel: Michelo freezes while watched after the lock timer has completed
+                if (lookingAtMichelo) {
+                    michelo.lookAt(playerPos);
+                    return;
+                }
             }
 
             const rifleAggro = rifleOwned && !playerInSafeZone;
