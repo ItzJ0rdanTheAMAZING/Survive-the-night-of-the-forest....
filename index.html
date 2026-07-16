@@ -2935,6 +2935,12 @@
             return forward.dot(toMichelo) > 0.55;
         }
 
+        function isMicheloInRender() {
+            if (!michelo) return false;
+            const ndc = michelo.position.clone().project(camera);
+            return ndc.z >= -1 && ndc.z <= 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;
+        }
+
         function forceLookAtMichelo() {
             if (!michelo) return;
             const lookTarget = new THREE.Vector3(michelo.position.x, camera.position.y, michelo.position.z);
@@ -2951,9 +2957,10 @@
 
             const distance = michelo.position.distanceTo(playerPos);
             const lookingAtMichelo = isLookingAtMichelo();
+            const micheloInRender = isMicheloInRender();
 
             if (micheloState !== 'STUN') {
-                if (lookingAtMichelo && !micheloLookLockActive) {
+                if (lookingAtMichelo && micheloInRender && !micheloLookLockActive) {
                     micheloLookLockActive = true;
                     micheloLookLockTimer = MICHELO_STARE_LOCK_DURATION;
                 }
@@ -2963,8 +2970,12 @@
                     if (!lookingAtMichelo) {
                         forceLookAtMichelo();
                     }
-                    alertUI.style.color = '#b595ff';
-                    alertUI.innerText = `👁️ Keep staring at Michelo: ${micheloLookLockTimer.toFixed(1)}s`;
+                    if (micheloInRender) {
+                        alertUI.style.color = '#b595ff';
+                        alertUI.innerText = `👁️ Keep staring at Michelo: ${micheloLookLockTimer.toFixed(1)}s`;
+                    } else if (alertUI.innerText.startsWith('👁️ Keep staring at Michelo:')) {
+                        alertUI.innerText = '';
+                    }
                     michelo.lookAt(playerPos);
                     return;
                 }
